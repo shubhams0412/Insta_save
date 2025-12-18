@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:insta_save/screens/repost_screen.dart';
-import 'package:insta_save/utils/saved_post.dart';
+import 'package:insta_save/services/saved_post.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../utils/navigation_helper.dart';
+import '../services/navigation_helper.dart';
 
 class EditPostScreen extends StatefulWidget {
   final String imagePath;
@@ -192,11 +192,6 @@ class _EditPostScreenState extends State<EditPostScreen> {
                 ),
               ),
             ),
-
-
-
-
-
             // --- BOTTOM BUTTON ---
             Padding(
               padding: const EdgeInsets.all(24.0),

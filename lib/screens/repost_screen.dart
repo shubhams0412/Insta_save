@@ -143,10 +143,10 @@ class _RepostScreenState extends State<RepostScreen> {
             }
 
             return Container(
-              height: 400,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // --- Header: Preview & Done Button ---
                   Row(
@@ -370,23 +370,52 @@ class _RepostScreenState extends State<RepostScreen> {
     );
   }
 
+  // ✅ UPDATED DELETE LOGIC
+// ✅ UPDATED DELETE LOGIC
   Future<void> _deletePostFromList() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+
       final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
       final int initialLength = savedData.length;
+
       savedData.removeWhere((item) {
         final Map<String, dynamic> decoded = jsonDecode(item);
         return decoded['localPath'] == widget.localImagePath;
       });
+
       if (savedData.length < initialLength) {
         await prefs.setStringList('savedPosts', savedData);
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post removed')));
-          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomeScreen()), (route) => false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Post removed')),
+          );
+
+          // 🧠 CALCULATE TAB INDEX
+          int targetTab = 0; // Default: Posts (Index 0)
+
+          if (widget.postUrl == "device_media") {
+            targetTab = 2; // Device Media Tab
+          } else if (_isVideo) {
+            targetTab = 1; // Reels Tab
+          } else {
+            targetTab = 0; // Posts Tab
+          }
+
+          // ✅ NAVIGATE TO SPECIFIC TAB
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => HomeScreen(initialTabIndex: targetTab),
+            ),
+                (Route<dynamic> route) => false,
+          );
         }
       }
-    } catch (e) { print("Error deleting: $e"); }
+    } catch (e) {
+      print("Error deleting: $e");
+    }
   }
 
   void _onCopyPressed() {

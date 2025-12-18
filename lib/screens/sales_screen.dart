@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:insta_save/utils/navigation_helper.dart';
-import 'package:insta_save/utils/webview_screen.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/webview_screen.dart';
 
 // You can run this file directly to test the screen
 void main() {

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:insta_save/screens/_buildStepCard.dart';
 import 'package:insta_save/screens/sales_screen.dart';
-import 'package:insta_save/utils/navigation_helper.dart';
-import 'package:insta_save/utils/webview_screen.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/webview_screen.dart';
 import 'package:insta_save/screens/widget_screen.dart';
 import 'package:share_plus/share_plus.dart';
 

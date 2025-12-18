@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:insta_save/screens/repost_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:insta_save/utils/saved_post.dart'; // Adjust path if needed
-import 'package:insta_save/utils/navigation_helper.dart'; // Adjust path if needed
+import 'package:insta_save/services/saved_post.dart'; // Adjust path if needed
+import 'package:insta_save/services/navigation_helper.dart'; // Adjust path if needed
 
 class AllMediaScreen extends StatefulWidget {
   final String title;
@@ -200,9 +200,9 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
         padding: const EdgeInsets.all(8),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 1.0,
+          crossAxisSpacing: 6,
+          mainAxisSpacing: 10,
+          childAspectRatio: 0.7,
         ),
         itemCount: _currentList.length,
         itemBuilder: (context, index) {
