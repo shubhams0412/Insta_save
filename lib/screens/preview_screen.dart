@@ -1,13 +1,14 @@
-import 'dart:async'; // ✅ Import this for StreamSubscription
+import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:insta_save/screens/home.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
-import 'package:insta_save/services/navigation_helper.dart';
+
+import 'package:insta_save/screens/repost_screen.dart';
 import 'package:insta_save/services/download_manager.dart';
+import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/widgets/status_dialog.dart';
-import 'repost_screen.dart';
 
 class PreviewScreen extends StatefulWidget {
   final List<Map<String, String>> mediaItems;
@@ -32,7 +33,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
   int _currentPage = 0;
   String? _tempPath;
 
-  // ✅ 1. Add Subscription & Dialog State variables
   StreamSubscription? _downloadSubscription;
   bool _isDialogOpen = false;
 
@@ -42,53 +42,52 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _pageController = PageController();
     _initTempDir();
 
-    // ✅ 2. Listen for completion events to Auto-Close the dialog
+    // 1. Listen for completion to Auto-Close dialog
     _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((_) {
-      // Check if the specific batch for this post is totally done
-      // (We add a small delay to ensure the Manager has updated its list)
+      if (!mounted) return;
+      // Small delay to allow manager to update internal list
       Future.delayed(const Duration(milliseconds: 500), () {
-        bool isStillDownloading = DownloadManager.instance.isBatchDownloading(widget.postUrl);
+        if (!mounted) return;
+        final isStillDownloading = DownloadManager.instance.isBatchDownloading(widget.postUrl);
 
-        if (!isStillDownloading && _isDialogOpen && mounted) {
-          Navigator.of(context).pop(); // 💥 Auto-Pop the Loader
+        if (!isStillDownloading && _isDialogOpen) {
+          Navigator.of(context).pop(); // Auto-Pop
         }
       });
     });
 
+    // 2. Start Download & Show Dialog
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!DownloadManager.instance.isBatchDownloading(widget.postUrl)) {
-
         DownloadManager.instance.startBatchDownloads(
           widget.mediaItems,
           widget.username,
           widget.caption,
           widget.postUrl,
         );
-
-        // ✅ 3. Mark dialog as Open
-        _isDialogOpen = true;
-
         _isDialogOpen = true;
 
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (_) {
-            // ✅ WRAP DIALOG IN ANIMATED BUILDER TO UPDATE PROGRESS LIVE
             return AnimatedBuilder(
               animation: DownloadManager.instance,
               builder: (context, _) {
-                // Get real-time progress (0.0 to 1.0)
                 final double progress = DownloadManager.instance.getBatchProgress(widget.postUrl);
-
+                if (progress >= 1.0 && _isDialogOpen) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    }
+                  });
+                }
                 return StatusDialog(
                   type: DialogType.processing,
-                  progress: progress, // ✅ Pass the live progress here
+                  progress: progress,
                   onButtonClick: () {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      createSlideRoute(const HomeScreen(), direction: SlideFrom.left),
-                          (route) => false,
-                    );
+                    // "Got it, notify me" -> Go to Home
+                    Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                 );
               },
@@ -103,18 +102,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Future<void> _initTempDir() async {
     final dir = await getTemporaryDirectory();
-    if(mounted) {
-      setState(() {
-        _tempPath = dir.path;
-      });
+    if (mounted) {
+      setState(() => _tempPath = dir.path);
     }
   }
 
   @override
   void dispose() {
-    // ✅ 5. Cancel subscription to prevent memory leaks
     _downloadSubscription?.cancel();
-
     _pageController.dispose();
     super.dispose();
   }
@@ -129,129 +124,33 @@ class _PreviewScreenState extends State<PreviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.username),
+        title: Text(widget.username, style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: AnimatedBuilder(
+      body: _tempPath == null
+          ? const SizedBox() // Wait for temp path
+          : AnimatedBuilder(
         animation: DownloadManager.instance,
         builder: (context, child) {
-          final manager = DownloadManager.instance;
-          final isBatchDownloading = manager.isBatchDownloading(widget.postUrl);
-
-          if (_tempPath == null) return const SizedBox();
+          final isBatchDownloading = DownloadManager.instance.isBatchDownloading(widget.postUrl);
 
           return Stack(
             children: [
-              // --- CONTENT CAROUSEL ---
               Column(
                 children: [
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: widget.mediaItems.length,
-                      onPageChanged: (index) => setState(() => _currentPage = index),
-                      itemBuilder: (context, index) {
-                        final itemUrl = widget.mediaItems[index]['url']!;
-                        final expectedPath = _getExpectedFilePath(itemUrl, index);
-                        final file = File(expectedPath);
-
-                        bool fileExists = file.existsSync();
-
-                        if (fileExists) {
-                          return LocalMediaViewer(filePath: expectedPath);
-                        }
-
-                        final task = manager.activeTasks.firstWhere(
-                              (t) => t.url == itemUrl,
-                          orElse: () => DownloadTask(id: "", url: "", type: "", username: "", caption: "", postUrl: ""),
-                        );
-
-                        if (task.isCompleted && task.localPath != null) {
-                          return LocalMediaViewer(filePath: task.localPath!);
-                        }
-
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (widget.mediaItems[index]['thumbnail'] != null)
-                              Image.network(
-                                widget.mediaItems[index]['thumbnail']!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_,__,___) => Container(color: Colors.grey[200]),
-                              )
-                            else
-                              Container(color: Colors.grey[200]),
-
-                            if(isBatchDownloading) Container(color: Colors.black38),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
+                  // Carousel
+                  Expanded(child: _buildCarousel(isBatchDownloading)),
 
                   // Indicators
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      widget.mediaItems.length,
-                          (index) => Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                        width: _currentPage == index ? 10 : 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: _currentPage == index ? Colors.black : Colors.grey,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ),
+                  _buildPageIndicators(),
 
                   // Next Button
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isBatchDownloading ? Colors.grey : Colors.black,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onPressed: () {
-                        if (isBatchDownloading) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("⏳ Please wait for download to finish")),
-                          );
-                          return;
-                        }
-
-                        final path = _getExpectedFilePath(widget.mediaItems[_currentPage]['url']!, _currentPage);
-                        if (File(path).existsSync()) {
-                          Navigator.of(context).push(createSlideRoute(
-                            RepostScreen(
-                              imageUrl: path,
-                              username: widget.username,
-                              initialCaption: widget.caption,
-                              postUrl: widget.postUrl,
-                              localImagePath: path,
-                              showDeleteButton: false,
-                              showHomeButton: true,
-                            ),
-                            direction: SlideFrom.right,
-                          ));
-                        }
-                      },
-                      child: Text(
-                        isBatchDownloading ? "Downloading..." : "Next",
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
+                  _buildNextButton(isBatchDownloading),
                 ],
               ),
             ],
@@ -260,16 +159,161 @@ class _PreviewScreenState extends State<PreviewScreen> {
       ),
     );
   }
+
+  Widget _buildCarousel(bool isBatchDownloading) {
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: widget.mediaItems.length,
+      onPageChanged: (index) => setState(() => _currentPage = index),
+      itemBuilder: (context, index) {
+        final itemUrl = widget.mediaItems[index]['url']!;
+        final thumbnail = widget.mediaItems[index]['thumbnail'];
+        final expectedPath = _getExpectedFilePath(itemUrl, index);
+        final file = File(expectedPath);
+
+        // 1. Check Local File
+        if (file.existsSync()) {
+          // ✅ Key is important to prevent video state mix-ups
+          return LocalMediaViewer(
+            key: ValueKey(expectedPath),
+            filePath: expectedPath,
+            thumbnail: thumbnail, // Pass thumbnail for smooth loading
+          );
+        }
+
+        // 2. Check Completed Task (In memory fallback)
+        final task = DownloadManager.instance.activeTasks.firstWhere(
+              (t) => t.url == itemUrl,
+          orElse: () => DownloadTask(id: "", url: "", type: "", username: "", caption: "", postUrl: ""),
+        );
+
+        if (task.isCompleted.value && task.localPath != null) {
+          return LocalMediaViewer(
+            key: ValueKey(task.localPath),
+            filePath: task.localPath!,
+            thumbnail: thumbnail,
+          );
+        }
+
+        // 3. Fallback: Show Thumbnail + Overlay (with error handling)
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (thumbnail != null && thumbnail.isNotEmpty)
+              Image.network(
+                thumbnail,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: Icon(Icons.image, color: Colors.grey, size: 50),
+                  ),
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+              )
+            else
+              Container(
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(Icons.image, color: Colors.grey, size: 50),
+                ),
+              ),
+
+            // Darken if downloading
+            if (isBatchDownloading) Container(color: Colors.black38),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPageIndicators() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        widget.mediaItems.length,
+            (index) => AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          width: _currentPage == index ? 10 : 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: _currentPage == index ? Colors.black : Colors.grey.shade400,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNextButton(bool isBatchDownloading) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isBatchDownloading ? Colors.grey : Colors.black,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 50),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+        onPressed: () {
+          if (isBatchDownloading) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("⏳ Please wait for download to finish")),
+            );
+            return;
+          }
+
+          final path = _getExpectedFilePath(widget.mediaItems[_currentPage]['url']!, _currentPage);
+          if (File(path).existsSync()) {
+            Navigator.of(context).push(createSlideRoute(
+              RepostScreen(
+                imageUrl: path,
+                username: widget.username,
+                initialCaption: widget.caption,
+                postUrl: widget.postUrl,
+                localImagePath: path,
+                showDeleteButton: false,
+                showHomeButton: true,
+              ),
+              direction: SlideFrom.right,
+            ));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("⚠️ Media file not found. Try downloading again.")),
+            );
+          }
+        },
+        child: Text(
+          isBatchDownloading ? "Downloading..." : "Next",
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
 }
 
-// ... (Rest of LocalMediaViewer and PlayPauseOverlay)
-
 // --------------------------------------------------------
-// 🔹 Helper Widget to display Local Image or Video
+// 🔹 Helper Widget: LocalMediaViewer
 // --------------------------------------------------------
 class LocalMediaViewer extends StatefulWidget {
   final String filePath;
-  const LocalMediaViewer({super.key, required this.filePath});
+  final String? thumbnail;
+
+  const LocalMediaViewer({
+    super.key,
+    required this.filePath,
+    this.thumbnail,
+  });
 
   @override
   State<LocalMediaViewer> createState() => _LocalMediaViewerState();
@@ -277,52 +321,249 @@ class LocalMediaViewer extends StatefulWidget {
 
 class _LocalMediaViewerState extends State<LocalMediaViewer> {
   VideoPlayerController? _videoController;
+  bool _isInitialized = false;
+  bool _hasError = false;
+  bool _isDisposed = false;
+  bool _isVideo = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.filePath.endsWith(".mp4")) {
-      _videoController = VideoPlayerController.file(File(widget.filePath))
-        ..initialize().then((_) {
-          if (mounted) setState(() {});
-          _videoController!.setLooping(true);
-          _videoController!.play();
-        });
+    _isVideo = widget.filePath.toLowerCase().endsWith(".mp4");
+    if (_isVideo) {
+      _initializeVideo();
     }
   }
 
   @override
-  void dispose() {
+  void didUpdateWidget(covariant LocalMediaViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filePath != widget.filePath) {
+      _disposeVideo();
+      _hasError = false;
+      _isDisposed = false;
+      _isVideo = widget.filePath.toLowerCase().endsWith(".mp4");
+      if (_isVideo) {
+        _initializeVideo();
+      }
+    }
+  }
+
+  Future<void> _initializeVideo() async {
+    final file = File(widget.filePath);
+
+    // Verify file exists and has content
+    if (!file.existsSync()) {
+      if (mounted && !_isDisposed) {
+        setState(() => _hasError = true);
+      }
+      return;
+    }
+
+    try {
+      // Check if file has content
+      final fileSize = await file.length();
+      if (fileSize == 0) {
+        throw Exception('Video file is empty');
+      }
+
+      // Small delay to ensure file is fully written
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      if (_isDisposed || !mounted) return;
+
+      _videoController = VideoPlayerController.file(file);
+
+      await _videoController!.initialize().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Video initialization timeout');
+        },
+      );
+
+      if (_isDisposed || !mounted) {
+        _videoController?.dispose();
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _hasError = false;
+        });
+      }
+
+      _videoController!.setLooping(true);
+      _videoController!.play();
+    } catch (error) {
+      debugPrint("❌ Video initialization error: $error");
+      if (mounted && !_isDisposed) {
+        setState(() => _hasError = true);
+      }
+      _videoController?.dispose();
+      _videoController = null;
+    }
+  }
+
+  void _disposeVideo() {
+    _isDisposed = true;
+    _videoController?.pause();
     _videoController?.dispose();
+    _videoController = null;
+    _isInitialized = false;
+  }
+
+  @override
+  void dispose() {
+    _disposeVideo();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.filePath.endsWith(".mp4")) {
-      if (_videoController != null && _videoController!.value.isInitialized) {
-        return Stack(
+    if (_isVideo) {
+      return _buildVideoPlayer();
+    } else {
+      return _buildImageViewer();
+    }
+  }
+
+  Widget _buildVideoPlayer() {
+    // ERROR STATE
+    if (_hasError) {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white, size: 50),
+              const SizedBox(height: 10),
+              const Text(
+                'Failed to load video',
+                style: TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _hasError = false;
+                    _isDisposed = false;
+                  });
+                  _initializeVideo();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // PLAYING STATE
+    if (_isInitialized && _videoController != null && _videoController!.value.isInitialized) {
+      return Container(
+        color: Colors.black,
+        child: Stack(
           alignment: Alignment.center,
           children: [
-            AspectRatio(
-              aspectRatio: _videoController!.value.aspectRatio,
-              child: VideoPlayer(_videoController!),
+            Center(
+              child: AspectRatio(
+                aspectRatio: _videoController!.value.aspectRatio,
+                child: VideoPlayer(_videoController!),
+              ),
             ),
             _PlayPauseOverlay(controller: _videoController!),
           ],
-        );
-      } else {
-        // ❌ REMOVED: CircularProgressIndicator
-        // Replaced with a black container to prevent white flashes while loading
-        return Container(color: Colors.black);
-      }
-    } else {
-      return Image.file(
-        File(widget.filePath),
-        fit: BoxFit.contain,
-        errorBuilder: (_,__,___) => const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+        ),
       );
     }
+
+    // LOADING STATE - Show simple loading indicator, no thumbnail
+    return Container(
+      color: Colors.black,
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Loading video...',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageViewer() {
+    final file = File(widget.filePath);
+
+    // File doesn't exist
+    if (!file.existsSync()) {
+      return Container(
+        color: Colors.grey[200],
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image, size: 50, color: Colors.grey),
+              SizedBox(height: 8),
+              Text('Image not found', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Display image with comprehensive error handling
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Image.file(
+          file,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint("❌ Image load error: $error");
+            return Container(
+              color: Colors.grey[200],
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            );
+          },
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded) return child;
+
+            return AnimatedOpacity(
+              opacity: frame == null ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              child: frame == null
+                  ? const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+                  : child,
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -335,38 +576,34 @@ class _PlayPauseOverlay extends StatefulWidget {
 }
 
 class _PlayPauseOverlayState extends State<_PlayPauseOverlay> {
-  bool _showPlayIcon = false;
-
-  void _togglePlayPause() {
-    setState(() {
-      if (widget.controller.value.isPlaying) {
-        widget.controller.pause();
-        _showPlayIcon = true;
-      } else {
-        widget.controller.play();
-        _showPlayIcon = false;
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _togglePlayPause,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(color: Colors.transparent),
-          if (_showPlayIcon || !widget.controller.value.isPlaying)
-            Container(
+      onTap: () {
+        setState(() {
+          if (widget.controller.value.isPlaying) {
+            widget.controller.pause();
+          } else {
+            widget.controller.play();
+          }
+        });
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: Center(
+          child: AnimatedOpacity(
+            opacity: widget.controller.value.isPlaying ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 300),
+            child: Container(
               decoration: const BoxDecoration(
-                color: Colors.black45,
+                color: Colors.black54,
                 shape: BoxShape.circle,
               ),
               padding: const EdgeInsets.all(16),
               child: const Icon(Icons.play_arrow, color: Colors.white, size: 48),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:insta_save/screens/repost_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:insta_save/services/saved_post.dart'; // Adjust path if needed
-import 'package:insta_save/services/navigation_helper.dart'; // Adjust path if needed
+import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/services/navigation_helper.dart';
 
 class AllMediaScreen extends StatefulWidget {
   final String title;
@@ -25,12 +25,15 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
   late List<Map<String, dynamic>> _currentList;
   bool _isSelectionMode = false;
   final Set<String> _selectedPaths = {};
+  bool _isDeleting = false;
 
   @override
   void initState() {
     super.initState();
     _currentList = List.from(widget.mediaList);
   }
+
+  // --- LOGIC: Selection ---
 
   void _toggleSelectionMode() {
     setState(() {
@@ -45,6 +48,11 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
         _selectedPaths.remove(path);
       } else {
         _selectedPaths.add(path);
+      }
+      // Auto-exit selection mode if nothing is left
+      if (_selectedPaths.isEmpty && _isSelectionMode) {
+        // Optional: Uncomment next line if you want to exit mode when empty
+        // _isSelectionMode = false;
       }
     });
   }
@@ -63,13 +71,15 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     });
   }
 
-  Future<void> _deleteSelectedItems() async {
+  // --- LOGIC: Deletion ---
+
+  Future<void> _showDeleteConfirmation() async {
     if (_selectedPaths.isEmpty) return;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Selected?"),
+        title: const Text("Delete Items?"),
         content: Text("Are you sure you want to delete ${_selectedPaths.length} items?"),
         actions: [
           TextButton(
@@ -77,9 +87,9 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
             child: const Text("Cancel", style: TextStyle(color: Colors.black)),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
-              await _performDeletion();
+            onPressed: () {
+              Navigator.pop(context);
+              _performDeletion();
             },
             child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),
@@ -88,183 +98,253 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     );
   }
 
-  // ✅ FIXED DELETION LOGIC
   Future<void> _performDeletion() async {
+    setState(() => _isDeleting = true);
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
 
-      print("🗑️ Attempting to delete ${_selectedPaths.length} items.");
+      // 1. Filter and Delete in one pass
+      final List<String> updatedData = [];
 
-      // 1. Remove from SharedPreferences
-      savedData.removeWhere((itemJson) {
+      for (var itemJson in savedData) {
         try {
           final Map<String, dynamic> decoded = jsonDecode(itemJson);
           final String path = decoded['localPath'];
 
-          // Check if this item is selected for deletion
           if (_selectedPaths.contains(path)) {
-            // ✅ FIX: Wrap file deletion in its own try-catch.
-            // This ensures that even if the file is missing/locked,
-            // we STILL remove the entry from the list.
+            // Delete actual file
             try {
               final file = File(path);
-              if (file.existsSync()) {
-                file.deleteSync();
-                print("✅ Deleted file: $path");
-              }
-            } catch (fileError) {
-              print("⚠️ File deletion error (ignoring for list update): $fileError");
+              if (file.existsSync()) file.deleteSync();
+            } catch (e) {
+              debugPrint("⚠️ File delete error: $e");
             }
-
-            return true; // ✅ ALWAYS remove from list if selected
+          } else {
+            // Keep this item
+            updatedData.add(itemJson);
           }
-          return false; // Keep in list
         } catch (e) {
-          print("⚠️ Error decoding item during delete: $e");
-          return false;
+          // If JSON is corrupt, maybe don't keep it, or keep it safe.
+          // Here we keep it to prevent accidental data loss of good items.
+          updatedData.add(itemJson);
         }
-      });
+      }
 
-      // 2. Save updated list back to Prefs
-      await prefs.setStringList('savedPosts', savedData);
+      // 2. Save Updated List
+      await prefs.setStringList('savedPosts', updatedData);
 
       // 3. Update UI
-      setState(() {
-        _currentList.removeWhere((item) {
-          final post = item['data'] as SavedPost;
-          return _selectedPaths.contains(post.localPath);
-        });
-        _selectedPaths.clear();
-        if (_currentList.isEmpty) _isSelectionMode = false;
-      });
-
       if (mounted) {
+        setState(() {
+          _currentList.removeWhere((item) {
+            final post = item['data'] as SavedPost;
+            return _selectedPaths.contains(post.localPath);
+          });
+          _selectedPaths.clear();
+          _isSelectionMode = false;
+          _isDeleting = false;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Items deleted successfully")),
         );
       }
     } catch (e) {
-      print("❌ Critical error during deletion: $e");
+      debugPrint("❌ Critical delete error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error deleting: $e")),
-        );
+        setState(() => _isDeleting = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
   }
 
+  // --- UI BUILD ---
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    // Intercept Back Button to cancel selection mode first
+    return PopScope(
+      canPop: !_isSelectionMode,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        if (_isSelectionMode) {
+          _toggleSelectionMode();
+        } else {
+          // ✅ Return the updated list here as well (for physical back button)
+          Navigator.pop(context, _currentList);
+        }
+      },
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _isSelectionMode ? "${_selectedPaths.length} Selected" : widget.title,
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          if (_isSelectionMode) ...[
-            TextButton(
-              onPressed: _toggleSelectAll,
-              child: Text(
-                _selectedPaths.length == _currentList.length ? "Deselect All" : "Select All",
-                style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: _selectedPaths.isNotEmpty ? _deleteSelectedItems : null,
-            ),
-          ] else ...[
-            TextButton(
-              onPressed: _toggleSelectionMode,
-              child: const Text(
-                "Select",
-                style: TextStyle(color: Colors.black, fontSize: 16),
-              ),
-            ),
-          ],
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: _currentList.isEmpty
-          ? const Center(child: Text("No Items"))
-          : GridView.builder(
-        padding: const EdgeInsets.all(8),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 6,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.7,
-        ),
-        itemCount: _currentList.length,
-        itemBuilder: (context, index) {
-          final postMap = _currentList[index];
-          return _buildGridItem(context, postMap);
-        },
+        appBar: _buildAppBar(),
+        body: _isDeleting
+            ? const Center(child: CircularProgressIndicator(color: Colors.black))
+            : _currentList.isEmpty
+            ? _buildEmptyState()
+            : _buildGrid(),
       ),
     );
   }
 
-  Widget _buildGridItem(BuildContext context, Map<String, dynamic> postMap) {
-    final post = postMap['data'] as SavedPost;
-    final thumbPath = postMap['thumbPath'] as String?;
-    final bool isVideoItem = postMap['type'] == 'video';
-
-    final bool isSelected = _selectedPaths.contains(post.localPath);
-
-    return GestureDetector(
-      onTap: () {
-        if (_isSelectionMode) {
-          _toggleItemSelection(post.localPath);
-        } else {
-          FocusManager.instance.primaryFocus?.unfocus();
-          Navigator.of(context).push(
-            createSlideRoute(
-              RepostScreen(
-                imageUrl: post.localPath,
-                username: post.username,
-                initialCaption: post.caption,
-                postUrl: post.postUrl,
-                localImagePath: post.localPath,
-                showDeleteButton: true,
-              ),
-              direction: SlideFrom.bottom,
+  AppBar _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+        onPressed: () {
+          if (_isSelectionMode) {
+            _toggleSelectionMode();
+          } else {
+            Navigator.pop(context, _currentList);
+          }
+        },
+      ),
+      title: Text(
+        _isSelectionMode ? "${_selectedPaths.length} Selected" : widget.title,
+        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+      ),
+      actions: [
+        if (_isSelectionMode) ...[
+          TextButton(
+            onPressed: _toggleSelectAll,
+            child: Text(
+              _selectedPaths.length == _currentList.length ? "Deselect All" : "Select All",
+              style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
             ),
-          );
-        }
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: _selectedPaths.isNotEmpty ? _showDeleteConfirmation : null,
+          ),
+        ] else ...[
+          TextButton(
+            onPressed: _toggleSelectionMode,
+            child: const Text("Select", style: TextStyle(color: Colors.black, fontSize: 16)),
+          ),
+        ],
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.perm_media_outlined, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text("No media found", style: TextStyle(color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        // 1.0 makes items square. Change to 0.7 if you prefer tall rectangles.
+        childAspectRatio: 1.0,
+      ),
+      itemCount: _currentList.length,
+      itemBuilder: (context, index) {
+        final postMap = _currentList[index];
+        final post = postMap['data'] as SavedPost;
+
+        return MediaGridItem(
+          post: post,
+          thumbPath: postMap['thumbPath'] as String?,
+          isSelectionMode: _isSelectionMode,
+          isSelected: _selectedPaths.contains(post.localPath),
+          isVideo: postMap['type'] == 'video',
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleItemSelection(post.localPath);
+            } else {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.of(context).push(
+                createSlideRoute(
+                  RepostScreen(
+                    imageUrl: post.localPath,
+                    username: post.username,
+                    initialCaption: post.caption,
+                    postUrl: post.postUrl,
+                    localImagePath: post.localPath,
+                    showDeleteButton: true,
+                  ),
+                  direction: SlideFrom.bottom,
+                ),
+              );
+            }
+          },
+          onLongPress: () {
+            if (!_isSelectionMode) {
+              _toggleSelectionMode();
+              _toggleItemSelection(post.localPath);
+            }
+          },
+        );
       },
-      onLongPress: () {
-        if (!_isSelectionMode) {
-          _toggleSelectionMode();
-          _toggleItemSelection(post.localPath);
-        }
-      },
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 🔹 Helper Widget: Media Grid Item (Extracted for performance)
+// -----------------------------------------------------------------------------
+class MediaGridItem extends StatelessWidget {
+  final SavedPost post;
+  final String? thumbPath;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final bool isVideo;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const MediaGridItem({
+    super.key,
+    required this.post,
+    this.thumbPath,
+    required this.isSelectionMode,
+    required this.isSelected,
+    required this.isVideo,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          isVideoItem
-              ? _buildReelItem(post, thumbPath)
-              : _buildImageItem(post),
+          // 1. Background Image/Video Thumb
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _buildThumbnail(),
+          ),
 
-          if (_isSelectionMode) ...[
+          // 2. Selection Overlay
+          if (isSelectionMode) ...[
             if (isSelected)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withOpacity(0.4),
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
             Positioned(
-              top: 8,
-              right: 8,
+              top: 6,
+              right: 6,
               child: Container(
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
@@ -283,36 +363,28 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     );
   }
 
-  Widget _buildImageItem(SavedPost post) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.file(
+  Widget _buildThumbnail() {
+    if (isVideo) {
+      return Stack(
+        alignment: Alignment.center,
+        fit: StackFit.expand,
+        children: [
+          thumbPath != null
+              ? Image.file(
+            File(thumbPath!),
+            fit: BoxFit.cover,
+            errorBuilder: (_,__,___) => Container(color: Colors.grey[300]),
+          )
+              : Container(color: Colors.grey[300]),
+          const Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
+        ],
+      );
+    } else {
+      return Image.file(
         File(post.localPath),
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.grey),
-      ),
-    );
-  }
-
-  Widget _buildReelItem(SavedPost post, String? thumbPath) {
-    return Stack(
-      alignment: Alignment.center,
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: thumbPath != null
-              ? Image.file(File(thumbPath),
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity)
-              : Container(
-              color: Colors.grey[300],
-              width: double.infinity,
-              height: double.infinity),
-        ),
-        const Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
-      ],
-    );
+        errorBuilder: (_,__,___) => const Icon(Icons.broken_image, color: Colors.grey),
+      );
+    }
   }
 }

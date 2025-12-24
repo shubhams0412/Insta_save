@@ -1,21 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:insta_save/screens/rating_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-
-// void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key, required bool isIntroSeen});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: IntroScreen(),
-    );
-  }
-}
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -26,142 +13,179 @@ class IntroScreen extends StatefulWidget {
 
 class _IntroScreenState extends State<IntroScreen> {
   final PageController _pageController = PageController();
-  int _currentPage = 0;
 
-  final List<String> _titles = [
-    "Grab Reels, Stories &\nPosts in just one tap",
-    "Repost Your Favorite\nInstagram Posts!",
+  // Optimization: Use ValueNotifier to update ONLY the text title, not the whole screen
+  final ValueNotifier<int> _currentPageNotifier = ValueNotifier<int>(0);
+
+  // Data Model for the slides
+  final List<IntroItem> _items = [
+    IntroItem(
+      image: 'assets/images/intro_01.png',
+      title: "Grab Reels, Stories &\nPosts in just one tap",
+      rotation: 0.0,
+    ),
+    IntroItem(
+      image: 'assets/images/intro_02.png',
+      title: "Repost Your Favorite\nInstagram Posts!",
+      rotation: 0.1, // Slight rotation for the second image
+    ),
   ];
 
   @override
   void dispose() {
     _pageController.dispose();
+    _currentPageNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Ensure status bar icons are dark (visible on light gradient)
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+
     return Scaffold(
-      // Ensure the background covers the whole screen including status bar area
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE1BEE7), // Adjusted opacity for visibility (Purple)
-              Color(0xFFBBDEFB), // Adjusted opacity for visibility (Blue)
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // 1. PageView for the swipable cards
-              Expanded(
-                flex: 3,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 20.0), // Space from status bar
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: (int page) {
-                      setState(() {
-                        _currentPage = page;
-                      });
-                    },
-                    children: const [
-                      _IntroCard(
-                        imagePath: 'assets/images/intro_01.png',
-                      ),
-                      _IntroCard(
-                        imagePath: 'assets/images/intro_02.png',
-                        rotationAngle: 0.1,
-                      ),
-                    ],
+      body: Stack(
+        children: [
+          // 1. Background Gradient
+          _buildBackground(),
+
+          // 2. Main Content
+          SafeArea(
+            child: Column(
+              children: [
+                // --- SWIPEABLE CARDS ---
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 20.0),
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: _items.length,
+                      onPageChanged: (int page) {
+                        // Update the notifier without rebuilding the whole Scaffold
+                        _currentPageNotifier.value = page;
+                      },
+                      itemBuilder: (context, index) {
+                        return _IntroCard(
+                          imagePath: _items[index].image,
+                          rotationAngle: _items[index].rotation,
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
 
-              // 2. Bottom section (Text -> Dots -> Button)
-              Expanded(
-                flex: 2,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end, // Pushes content to bottom
-                    children: [
-                      // Title Text
-                      Text(
-                        _titles[_currentPage],
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.black, // Changed to black for visibility
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
+                // --- BOTTOM SECTION ---
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Dynamic Title (Listens to page changes)
+                        ValueListenableBuilder<int>(
+                          valueListenable: _currentPageNotifier,
+                          builder: (context, pageIndex, child) {
+                            return Text(
+                              _items[pageIndex].title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                height: 1.2,
+                              ),
+                            );
+                          },
                         ),
-                      ),
 
-                      const Spacer(), // Fills space between Text and Dots
+                        const Spacer(),
 
-                      // Dot Indicator
-                      SmoothPageIndicator(
-                        controller: _pageController,
-                        count: 2,
-                        effect: const WormEffect(
-                          dotColor: Colors.black26, // Inactive color
-                          activeDotColor: Colors.black, // Active color
-                          dotHeight: 10,
-                          dotWidth: 10,
-                          spacing: 16,
-                        ),
-                      ),
-
-                      const SizedBox(height: 32), // Space between dots and button
-
-                      // Get Started Button
-                      ElevatedButton(
-                        onPressed: () {
-                          navigateToHomeScreen();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 56), // Taller button
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                        // Dots
+                        SmoothPageIndicator(
+                          controller: _pageController,
+                          count: _items.length,
+                          effect: const WormEffect(
+                            dotColor: Colors.black26,
+                            activeDotColor: Colors.black,
+                            dotHeight: 10,
+                            dotWidth: 10,
+                            spacing: 16,
                           ),
                         ),
-                        child: const Text(
-                          'Get Started',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+
+                        const SizedBox(height: 32),
+
+                        // Button
+                        ElevatedButton(
+                          onPressed: navigateToReviewsScreen,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 56),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Get Started',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackground() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFE1BEE7), // Purple
+            Color(0xFFBBDEFB), // Blue
+          ],
         ),
       ),
     );
   }
 
-  Future<void> navigateToHomeScreen() async {
+  Future<void> navigateToReviewsScreen() async {
     final prefs = await SharedPreferences.getInstance();
+    // Save preference
+    await prefs.setBool('isIntroSeen', true);
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const ReviewsScreen()),
       );
-      await prefs.setBool('isIntroSeen', true);
     }
   }
+}
+
+// --- HELPER CLASSES ---
+
+class IntroItem {
+  final String image;
+  final String title;
+  final double rotation;
+
+  IntroItem({required this.image, required this.title, this.rotation = 0.0});
 }
 
 class _IntroCard extends StatelessWidget {
@@ -172,23 +196,16 @@ class _IntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Removed nested SafeArea to prevent layout issues
-    return Padding(
-      padding: const EdgeInsets.all(0), // Add padding so image isn't edge-to-edge
-      child: Center(
-        child: Transform.rotate(
-          angle: rotationAngle,
-          child: Container(
-            decoration: BoxDecoration(
-            ),
-            child: ClipRRect(
-              child: Image.asset(
-                imagePath,
-                fit: BoxFit.cover,
-                // Ensures the card doesn't get too huge
-                width: double.infinity,
-              ),
-            ),
+    return Center(
+      child: Transform.rotate(
+        angle: rotationAngle,
+        child: ClipRRect(
+          // Optional: Add border radius if your images need rounded corners
+          // borderRadius: BorderRadius.circular(20),
+          child: Image.asset(
+            imagePath,
+            fit: BoxFit.contain, // Changed to contain to respect aspect ratio inside page view
+            width: MediaQuery.of(context).size.width * 0.85, // 85% of screen width
           ),
         ),
       ),

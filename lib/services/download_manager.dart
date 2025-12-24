@@ -16,9 +16,9 @@ class DownloadTask {
   final String username;
   final String caption;
   final String postUrl;
+  final ValueNotifier<double> progress = ValueNotifier(0.0);
+  final ValueNotifier<bool> isCompleted = ValueNotifier(false);
 
-  double progress = 0.0;
-  bool isCompleted = false;
   bool hasError = false;
   String? localPath;
 
@@ -90,8 +90,7 @@ class DownloadManager extends ChangeNotifier {
             (List<int> newBytes) {
           bytes.addAll(newBytes);
           receivedBytes += newBytes.length;
-          task.progress = receivedBytes / contentLength;
-          notifyListeners(); // Updates Progress Bar
+          task.progress.value = receivedBytes / contentLength;
         },
         onDone: () async {
           await file.writeAsBytes(bytes);
@@ -118,37 +117,26 @@ class DownloadManager extends ChangeNotifier {
 
   Future<void> _completeTask(DownloadTask task, String localPath) async {
     task.localPath = localPath;
-    task.isCompleted = true;
-    task.progress = 1.0;
-
-    // 1. Save to History (so it's ready in the DB)
-    await _saveToHistory(task);
-
-    // 2. Notify UI (Update progress to 100%)
+    task.progress.value = 1.0;
+    task.isCompleted.value = true;
     notifyListeners();
 
-    // 3. Fire Completion Event (Home Screen loads the data in background)
+    // 1. Save to History
+    await _saveToHistory(task);
+
+    // 2. Notify UI: Show 100% progress
+    notifyListeners();
+
+    // 3. 🔥 FIRE COMPLETION EVENT NOW (Start reloading Home Screen DB)
+    // We do this BEFORE removing the task so there is no gap.
     _completionController.add(null);
 
-    // 4. CHECK BATCH STATUS
-    // Are there any OTHER tasks from this same postUrl that are NOT complete?
-    bool isBatchStillRunning = _activeTasks.any((t) =>
-    t.postUrl == task.postUrl && !t.isCompleted
-    );
+    // 4. Wait long enough for Home Screen to reload (e.g., 2 seconds)
+    // During this time, the item exists in BOTH lists.
+    await Future.delayed(const Duration(seconds: 2));
 
-    if (isBatchStillRunning) {
-      // 🛑 STOP! Don't remove this task yet.
-      // Keep it in the list so it stays in order with its downloading friends.
-      return;
-    }
-
-    // 5. IF BATCH IS DONE:
-    // Wait a small moment for visual satisfaction
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Remove ALL tasks belonging to this batch at once
-    _activeTasks.removeWhere((t) => t.postUrl == task.postUrl);
-
+    // 5. Remove from active list
+    _activeTasks.remove(task);
     notifyListeners();
   }
 
@@ -177,8 +165,11 @@ class DownloadManager extends ChangeNotifier {
   double getBatchProgress(String postUrl) {
     final tasks = _activeTasks.where((t) => t.postUrl == postUrl).toList();
     if (tasks.isEmpty) return 1.0;
+
     double total = 0;
-    for (var t in tasks) total += t.progress;
+    for (var t in tasks) {
+      total += t.progress.value; // ✅ FIX
+    }
     return total / tasks.length;
   }
 

@@ -3,21 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/webview_screen.dart';
 
-// You can run this file directly to test the screen
+// Entry point for testing
 void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SalesScreen(),
-    );
-  }
+  runApp(const MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: SalesScreen(),
+  ));
 }
 
 class SalesScreen extends StatefulWidget {
@@ -31,48 +22,60 @@ class _SalesScreenState extends State<SalesScreen> {
   // 0 = Annual, 1 = Monthly
   int _selectedPlanIndex = 0;
 
+  final List<String> _features = [
+    'Download Unlimited Reels',
+    'Download Stories & Highlights ✨',
+    'Download Post & Videos',
+    'No Ads',
+    'Save Photos & Videos to Gallery',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    // Set status bar icons to white
+    // Set status bar icons to light (white) for dark background
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
     return Scaffold(
-      backgroundColor: Colors.black, // Fallback color
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           // 1. Background Image
-          // TODO: Replace 'assets/images/sales_background.png' with your asset
-          Image.asset(
-            'assets/images/sales_background.png',
-            fit: BoxFit.cover,
-            height: double.infinity,
-            width: double.infinity,
-            // Show a dark color while image loads or if it fails
-            errorBuilder: (context, error, stackTrace) {
-              return Container(color: const Color(0xFF1A1A1A)); // Dark fallback
-            },
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/sales_background.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF2C003E), Colors.black],
+                  ),
+                ),
+              ),
+            ),
           ),
 
-          // 3. Main Content
+          // 2. Content
           SafeArea(
             child: Column(
               children: [
+                // Scrollable Content
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Spacer to push content down
-                        SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                        SizedBox(height: MediaQuery.of(context).size.height * 0.08),
 
-                        // Header
+                        // HEADER
                         const Text(
                           'Instant Saver Premium',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 30,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -80,124 +83,124 @@ class _SalesScreenState extends State<SalesScreen> {
                         const Text(
                           'No commitment, cancel anytime',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 30),
 
-                        // "What You Get" Section
+                        // FEATURES LIST
                         _buildSectionHeader('WHAT YOU GET'),
                         const SizedBox(height: 16),
-                        _buildFeatureRow('Download Unlimited Reels'),
-                        _buildFeatureRow('Download Stories & Highlights ✨'),
-                        _buildFeatureRow('Download Post & Videos'),
-                        _buildFeatureRow('No Ads'),
-                        _buildFeatureRow('Save Photos & Videos to Gallery'),
-                        const SizedBox(height: 20),
+                        ..._features.map((f) => _FeatureRow(text: f)),
+                        const SizedBox(height: 30),
 
-                        // "Choose Plan" Section
-                        _buildSectionHeader('Choose Plan'),
-                        const SizedBox(height: 30), // Extra space for the tag
+                        // PLANS
+                        _buildSectionHeader('CHOOSE PLAN'),
+                        const SizedBox(height: 30),
 
-                        // Annual Plan Option
-                        _buildPlanOption(
+                        // Plan 0: Annual
+                        _PlanCard(
                           index: 0,
-                          title: 'Annunal', // As spelled in the image
-                          trialText: '3-day free trial',
+                          isSelected: _selectedPlanIndex == 0,
+                          title: 'Annual',
+                          subtitle: '3-day free trial',
                           price: '\$19.99',
                           originalPrice: '\$32.00',
-                          tagText: 'Best - \$0.38 / week',
+                          badgeText: 'Best - \$0.38 / week',
+                          onTap: () => setState(() => _selectedPlanIndex = 0),
                         ),
                         const SizedBox(height: 20),
 
-                        // Monthly Plan Option
-                        _buildPlanOption(
+                        // Plan 1: Monthly
+                        _PlanCard(
                           index: 1,
+                          isSelected: _selectedPlanIndex == 1,
                           title: 'Monthly',
-                          trialText: '3-day free trial',
+                          subtitle: '3-day free trial',
                           price: '\$9.99',
-                        ),
-                        const SizedBox(height: 24),
-                        // Continue Button
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFFCF1F), Color(0xFFF76B17),Color(0xFFFC01CA), Color(0xFF7E0BFD)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              // Handle continue tap
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: const Text(
-                              'Continue',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // Restore Purchase
-                        TextButton(
-                          onPressed: () {
-                            // Handle restore purchase
-                          },
-                          child: const Text(
-                            'Restore Purchase',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Footer Links
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _footerTextLink('Privacy Policy', () {
-                              // This is the new navigation logic
-                              Navigator.of(context).push(createSlideRoute(const WebViewScreen(
-                                title: 'Privacy Policy',
-                                url: 'https://google.com', // <-- Put your real URL here
-                              ), direction: SlideFrom.right));
-                            }),
-                            _footerTextSeparator(),
-                            _footerTextLink('Terms of Use', () {
-                              // This is the new navigation logic
-                              Navigator.of(context).push(createSlideRoute(const WebViewScreen(
-                                title: 'Terms of Use',
-                                url: 'https://google.com', // <-- Put your real URL here
-                              ), direction: SlideFrom.right));
-                            }),
-                            _footerTextSeparator(),
-                            _footerTextLink('Close', () {
-                              print("Close tapped!");
-                              // Close the sales screen
-                              Navigator.of(context).pop();
-                            }),
-                          ],
+                          onTap: () => setState(() => _selectedPlanIndex = 1),
                         ),
 
+                        const SizedBox(height: 30),
                       ],
                     ),
+                  ),
+                ),
+
+                // Sticky Bottom Section
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Continue Button
+                      Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFFFCF1F),
+                              Color(0xFFF76B17),
+                              Color(0xFFFC01CA),
+                              Color(0xFF7E0BFD)
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // TODO: Implement Purchase Logic
+                            print("Selected Plan: $_selectedPlanIndex");
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Continue',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Restore
+                      TextButton(
+                        onPressed: () {
+                          // TODO: Implement Restore Logic
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'Restore Purchase',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Footer Links
+                      _FooterLinks(
+                        onPrivacyTap: () => _openWebView(context, 'Privacy Policy', 'https://google.com'),
+                        onTermsTap: () => _openWebView(context, 'Terms of Use', 'https://google.com'),
+                        onCloseTap: () => Navigator.of(context).pop(),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -208,7 +211,12 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  // --- Helper Widgets ---
+  void _openWebView(BuildContext context, String title, String url) {
+    Navigator.of(context).push(createSlideRoute(
+      WebViewScreen(title: title, url: url),
+      direction: SlideFrom.right,
+    ));
+  }
 
   Widget _buildSectionHeader(String title) {
     return Text(
@@ -216,71 +224,89 @@ class _SalesScreenState extends State<SalesScreen> {
       textAlign: TextAlign.center,
       style: const TextStyle(
         color: Colors.white,
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.1,
+        fontSize: 16, // Slightly smaller for elegance
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.2,
       ),
     );
   }
+}
 
-  Widget _buildFeatureRow(String text) {
+// -----------------------------------------------------------------------------
+// 🔹 Helper Widgets (Extracted for Performance & Readability)
+// -----------------------------------------------------------------------------
+
+class _FeatureRow extends StatelessWidget {
+  final String text;
+  const _FeatureRow({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start, // Align icon to top if text wraps
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.check, color: Color(0xFF8a878c), size: 20),
-          const SizedBox(width: 16),
-          // --- FIX STARTS HERE ---
-          Expanded( // 1. Wrap Text in Expanded
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
               text,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
-          // --- FIX ENDS HERE ---
         ],
       ),
     );
   }
+}
 
-  Widget _buildPlanOption({
-    required int index,
-    required String title,
-    required String trialText,
-    required String price,
-    String? originalPrice,
-    String? tagText,
-  }) {
-    bool isSelected = _selectedPlanIndex == index;
+class _PlanCard extends StatelessWidget {
+  final int index;
+  final bool isSelected;
+  final String title;
+  final String subtitle;
+  final String price;
+  final String? originalPrice;
+  final String? badgeText;
+  final VoidCallback onTap;
 
+  const _PlanCard({
+    required this.index,
+    required this.isSelected,
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    this.originalPrice,
+    this.badgeText,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPlanIndex = index;
-        });
-      },
+      onTap: onTap,
       child: Stack(
-        clipBehavior: Clip.none, // Allow tag to overflow
+        clipBehavior: Clip.none,
         children: [
-          // The main plan container
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF1E1E1E) : Colors.black54,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSelected ? const Color(0xFF8A4DFF) : Colors.grey.shade700,
+                color: isSelected ? const Color(0xFFE84DFF) : Colors.grey.shade800,
                 width: 2,
               ),
             ),
             child: Row(
               children: [
-                // Custom radio button
+                // Radio Circle
                 Container(
                   width: 24,
                   height: 24,
@@ -288,7 +314,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     shape: BoxShape.circle,
                     color: isSelected ? const Color(0xFFE84DFF) : Colors.transparent,
                     border: Border.all(
-                      color: isSelected ? const Color(0xFFE84DFF) : Colors.grey.shade500,
+                      color: isSelected ? const Color(0xFFE84DFF) : Colors.grey.shade600,
                       width: 2,
                     ),
                   ),
@@ -298,7 +324,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
                 const SizedBox(width: 16),
 
-                // Plan details
+                // Text Info
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -310,18 +336,16 @@ class _SalesScreenState extends State<SalesScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      trialText,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
+                      subtitle,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ],
                 ),
                 const Spacer(),
 
-                // Price details
+                // Price Info
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -329,16 +353,16 @@ class _SalesScreenState extends State<SalesScreen> {
                       price,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 22,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     if (originalPrice != null)
                       Text(
-                        originalPrice,
+                        originalPrice!,
                         style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 14,
+                          color: Colors.white38,
+                          fontSize: 13,
                           decoration: TextDecoration.lineThrough,
                         ),
                       ),
@@ -348,28 +372,32 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
 
-          // "Best" Tag
-          if (tagText != null)
+          // "Best" Badge
+          if (badgeText != null)
             Positioned(
-              top: -14, // Position halfway outside the container
+              top: -12,
               left: 0,
               right: 0,
-              child: Align(
-                alignment: Alignment.center,
+              child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFFFCF1F), Color(0xFFF76B17),Color(0xFFFC01CA), Color(0xFF7E0BFD)],
+                      colors: [
+                        Color(0xFFFFCF1F),
+                        Color(0xFFF76B17),
+                        Color(0xFFFC01CA),
+                        Color(0xFF7E0BFD)
+                      ],
                     ),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    tagText,
+                    badgeText!,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 11,
                     ),
                   ),
                 ),
@@ -379,21 +407,47 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
   }
+}
 
-  Widget _footerTextLink(String text, VoidCallback onTap) {
-    return GestureDetector( // Wrap with GestureDetector
-      onTap: onTap, // Assign the function
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white54, fontSize: 12),
+class _FooterLinks extends StatelessWidget {
+  final VoidCallback onPrivacyTap;
+  final VoidCallback onTermsTap;
+  final VoidCallback onCloseTap;
+
+  const _FooterLinks({
+    required this.onPrivacyTap,
+    required this.onTermsTap,
+    required this.onCloseTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildLink("Privacy Policy", onPrivacyTap),
+        _buildDivider(),
+        _buildLink("Terms of Use", onTermsTap),
+        _buildDivider(),
+        _buildLink("Close", onCloseTap),
+      ],
+    );
+  }
+
+  Widget _buildLink(String text, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(4.0), // Hit area padding
+        child: Text(
+          text,
+          style: const TextStyle(color: Colors.white38, fontSize: 12),
+        ),
       ),
     );
   }
 
-  Widget _footerTextSeparator() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 6.0),
-      child: Text('|', style: TextStyle(color: Colors.white54, fontSize: 12)),
-    );
+  Widget _buildDivider() {
+    return const Text(" | ", style: TextStyle(color: Colors.white38, fontSize: 12));
   }
 }
