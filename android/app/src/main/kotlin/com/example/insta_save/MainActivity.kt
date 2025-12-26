@@ -26,8 +26,10 @@ class MainActivity : FlutterActivity() {
             MEDIA_CHANNEL
         ).setMethodCallHandler { call, result ->
 
-            if (call.method == "saveVideo") {
+            if (call.method == "saveMedia") {
                 val path = call.argument<String>("path")
+                val mediaType = call.argument<String>("mediaType") ?: "video"
+                
                 if (path == null) {
                     result.error("INVALID_ARGUMENT", "Path is null", null)
                     return@setMethodCallHandler
@@ -39,16 +41,26 @@ class MainActivity : FlutterActivity() {
                     return@setMethodCallHandler
                 }
 
-                val values = ContentValues().apply {
-                    put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
-                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/InstaSave")
+                val isImage = mediaType == "image"
+                val contentUri = if (isImage) {
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                } else {
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                 }
 
-                val uri: Uri? = contentResolver.insert(
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                    values
-                )
+                val values = ContentValues().apply {
+                    if (isImage) {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
+                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/InstaSave")
+                    } else {
+                        put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
+                        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                        put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/InstaSave")
+                    }
+                }
+
+                val uri: Uri? = contentResolver.insert(contentUri, values)
 
                 if (uri == null) {
                     result.error("MEDIA_ERROR", "Insert failed", null)
@@ -56,7 +68,6 @@ class MainActivity : FlutterActivity() {
                 }
 
                 try {
-                    // .use {} ensures streams are closed automatically even if an error occurs
                     contentResolver.openOutputStream(uri)?.use { outputStream ->
                         FileInputStream(file).use { inputStream ->
                             inputStream.copyTo(outputStream)
@@ -80,19 +91,21 @@ class MainActivity : FlutterActivity() {
             // ✅ Changed name to match Flutter's call: 'repostToInstagram'
             if (call.method == "repostToInstagram") {
                 val uriString = call.argument<String>("uri")
+                val mediaType = call.argument<String>("mediaType") ?: "video"
+                
                 if (uriString == null) {
                     result.error("INVALID_ARGUMENT", "URI is null", null)
                     return@setMethodCallHandler
                 }
 
                 val uri = Uri.parse(uriString)
+                val mimeType = if (mediaType == "image") "image/*" else "video/*"
 
                 val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "video/*"
+                    type = mimeType
                     putExtra(Intent.EXTRA_STREAM, uri)
                     setPackage("com.instagram.android")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    // Ensure the activity is started in a new task if necessary
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
 

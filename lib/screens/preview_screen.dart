@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:insta_save/screens/repost_screen.dart';
 import 'package:insta_save/services/download_manager.dart';
@@ -43,12 +44,16 @@ class _PreviewScreenState extends State<PreviewScreen> {
     _initTempDir();
 
     // 1. Listen for completion to Auto-Close dialog
-    _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((_) {
+    _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((
+      _,
+    ) {
       if (!mounted) return;
       // Small delay to allow manager to update internal list
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!mounted) return;
-        final isStillDownloading = DownloadManager.instance.isBatchDownloading(widget.postUrl);
+        final isStillDownloading = DownloadManager.instance.isBatchDownloading(
+          widget.postUrl,
+        );
 
         if (!isStillDownloading && _isDialogOpen) {
           Navigator.of(context).pop(); // Auto-Pop
@@ -74,7 +79,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
             return AnimatedBuilder(
               animation: DownloadManager.instance,
               builder: (context, _) {
-                final double progress = DownloadManager.instance.getBatchProgress(widget.postUrl);
+                final double progress = DownloadManager.instance
+                    .getBatchProgress(widget.postUrl);
                 if (progress >= 1.0 && _isDialogOpen) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (Navigator.of(context).canPop()) {
@@ -126,7 +132,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.username, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.username,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -135,28 +144,29 @@ class _PreviewScreenState extends State<PreviewScreen> {
       body: _tempPath == null
           ? const SizedBox() // Wait for temp path
           : AnimatedBuilder(
-        animation: DownloadManager.instance,
-        builder: (context, child) {
-          final isBatchDownloading = DownloadManager.instance.isBatchDownloading(widget.postUrl);
+              animation: DownloadManager.instance,
+              builder: (context, child) {
+                final isBatchDownloading = DownloadManager.instance
+                    .isBatchDownloading(widget.postUrl);
 
-          return Stack(
-            children: [
-              Column(
-                children: [
-                  // Carousel
-                  Expanded(child: _buildCarousel(isBatchDownloading)),
+                return Stack(
+                  children: [
+                    Column(
+                      children: [
+                        // Carousel
+                        Expanded(child: _buildCarousel(isBatchDownloading)),
 
-                  // Indicators
-                  _buildPageIndicators(),
+                        // Indicators
+                        _buildPageIndicators(),
 
-                  // Next Button
-                  _buildNextButton(isBatchDownloading),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
+                        // Next Button
+                        _buildNextButton(isBatchDownloading),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
     );
   }
 
@@ -183,8 +193,15 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
         // 2. Check Completed Task (In memory fallback)
         final task = DownloadManager.instance.activeTasks.firstWhere(
-              (t) => t.url == itemUrl,
-          orElse: () => DownloadTask(id: "", url: "", type: "", username: "", caption: "", postUrl: ""),
+          (t) => t.url == itemUrl,
+          orElse: () => DownloadTask(
+            id: "",
+            url: "",
+            type: "",
+            username: "",
+            caption: "",
+            postUrl: "",
+          ),
         );
 
         if (task.isCompleted.value && task.localPath != null) {
@@ -200,24 +217,21 @@ class _PreviewScreenState extends State<PreviewScreen> {
           fit: StackFit.expand,
           children: [
             if (thumbnail != null && thumbnail.isNotEmpty)
-              Image.network(
-                thumbnail,
+              CachedNetworkImage(
+                imageUrl: thumbnail,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                fadeInDuration: const Duration(milliseconds: 300),
+                // Placeholder removed aka transparent while loading
+                errorWidget: (context, url, error) => Container(
                   color: Colors.grey[300],
                   child: const Center(
-                    child: Icon(Icons.image, color: Colors.grey, size: 50),
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Colors.grey,
+                      size: 50,
+                    ),
                   ),
                 ),
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                },
               )
             else
               Container(
@@ -240,7 +254,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(
         widget.mediaItems.length,
-            (index) => AnimatedContainer(
+        (index) => AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           width: _currentPage == index ? 10 : 6,
@@ -262,34 +276,58 @@ class _PreviewScreenState extends State<PreviewScreen> {
           backgroundColor: isBatchDownloading ? Colors.grey : Colors.black,
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 0,
         ),
         onPressed: () {
           if (isBatchDownloading) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("⏳ Please wait for download to finish")),
+              const SnackBar(
+                content: Text("⏳ Please wait for download to finish"),
+              ),
             );
             return;
           }
 
-          final path = _getExpectedFilePath(widget.mediaItems[_currentPage]['url']!, _currentPage);
+          final path = _getExpectedFilePath(
+            widget.mediaItems[_currentPage]['url']!,
+            _currentPage,
+          );
+          final thumbnail = widget.mediaItems[_currentPage]['thumbnail'];
+
           if (File(path).existsSync()) {
-            Navigator.of(context).push(createSlideRoute(
-              RepostScreen(
-                imageUrl: path,
-                username: widget.username,
-                initialCaption: widget.caption,
-                postUrl: widget.postUrl,
-                localImagePath: path,
-                showDeleteButton: false,
-                showHomeButton: true,
-              ),
-              direction: SlideFrom.right,
-            ));
+            Navigator.of(context)
+                .push(
+                  createSlideRoute(
+                    RepostScreen(
+                      imageUrl: path,
+                      username: widget.username,
+                      initialCaption: widget.caption,
+                      postUrl: widget.postUrl,
+                      localImagePath: path,
+                      showDeleteButton: false,
+                      showHomeButton: true,
+                      thumbnailUrl: thumbnail ?? path,
+                    ),
+                    direction: SlideFrom.right,
+                  ),
+                )
+                .then((result) {
+                  if (result is Map && result['home'] == true) {
+                    if (mounted) {
+                      Navigator.of(context).pop(result);
+                    }
+                  }
+                });
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("⚠️ Media file not found. Try downloading again.")),
+              const SnackBar(
+                content: Text(
+                  "⚠️ Media file not found. Try downloading again.",
+                ),
+              ),
             );
           }
         },
@@ -309,11 +347,7 @@ class LocalMediaViewer extends StatefulWidget {
   final String filePath;
   final String? thumbnail;
 
-  const LocalMediaViewer({
-    super.key,
-    required this.filePath,
-    this.thumbnail,
-  });
+  const LocalMediaViewer({super.key, required this.filePath, this.thumbnail});
 
   @override
   State<LocalMediaViewer> createState() => _LocalMediaViewerState();
@@ -465,7 +499,9 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
     }
 
     // PLAYING STATE
-    if (_isInitialized && _videoController != null && _videoController!.value.isInitialized) {
+    if (_isInitialized &&
+        _videoController != null &&
+        _videoController!.value.isInitialized) {
       return Container(
         color: Colors.black,
         child: Stack(
@@ -483,26 +519,22 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
       );
     }
 
-    // LOADING STATE - Show simple loading indicator, no thumbnail
-    return Container(
-      color: Colors.black,
-      child: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Loading video...',
-              style: TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-          ],
+    // LOADING STATE
+    if (widget.thumbnail != null && widget.thumbnail!.isNotEmpty) {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: CachedNetworkImage(
+            imageUrl: widget.thumbnail!,
+            fit: BoxFit.contain,
+            placeholder: (context, url) => const SizedBox(),
+            errorWidget: (context, url, error) => const SizedBox(),
+          ),
         ),
-      ),
-    );
+      );
+    }
+
+    return Container(color: Colors.black);
   }
 
   Widget _buildImageViewer() {
@@ -542,7 +574,10 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
                   children: [
                     Icon(Icons.broken_image, size: 50, color: Colors.grey),
                     SizedBox(height: 8),
-                    Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      'Failed to load image',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   ],
                 ),
               ),
@@ -556,8 +591,8 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
               duration: const Duration(milliseconds: 300),
               child: frame == null
                   ? const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : child,
             );
           },
@@ -600,7 +635,11 @@ class _PlayPauseOverlayState extends State<_PlayPauseOverlay> {
                 shape: BoxShape.circle,
               ),
               padding: const EdgeInsets.all(16),
-              child: const Icon(Icons.play_arrow, color: Colors.white, size: 48),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 48,
+              ),
             ),
           ),
         ),

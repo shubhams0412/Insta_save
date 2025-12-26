@@ -28,15 +28,22 @@ import '_buildStepCard.dart';
 
 class HomeScreen extends StatefulWidget {
   final int initialTabIndex;
+  final bool silentLoad;
 
-  const HomeScreen({super.key, this.initialTabIndex = 0});
+  const HomeScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.silentLoad = false,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _linkController = TextEditingController();
+  late TabController _tabController;
 
   List<SavedPost> _savedPosts = [];
   List<Map<String, dynamic>>? _separatedMedia;
@@ -54,84 +61,153 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {});
     });
 
-    // Initial Load: Show Spinner (true)
-    _initGalleryData();
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+
+    // Register Lifecycle Observer
+    WidgetsBinding.instance.addObserver(this);
+
+    // Initial check for clipboard
+    _checkClipboardAndPaste();
+
+    // Initial Load: Show Spinner (true) only if NOT silentLoad
+    if (widget.silentLoad) {
+      _isLoadingMedia = false; // Start with content
+      _refreshGalleryDataSilently();
+    } else {
+      _initGalleryData(); // Show spinner
+    }
 
     // Download Finished: Silent Refresh (false)
-    _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((_) async {
+    _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((
+      _,
+    ) async {
       _refreshGalleryDataSilently();
     });
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkClipboardAndPaste();
+    }
+  }
+
+  Future<void> _checkClipboardAndPaste() async {
+    try {
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      if (clipboardData != null && clipboardData.text != null) {
+        String text = clipboardData.text!.trim();
+        // Basic Instagram link validation
+        if (text.contains("instagram.com/")) {
+          // Overwrite if the new link is different from the current one
+          if (_linkController.text.trim() != text) {
+            setState(() {
+              _linkController.text = text;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Clipboard access error: $e");
+    }
+  }
+
   Future<void> _refreshGalleryDataSilently() async {
     // 1. Fetch raw data from Prefs
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload(); // 🔥 Force sync with disk
     final savedData = prefs.getStringList('savedPosts') ?? [];
 
     final List<SavedPost> loadedPosts = savedData.map((json) {
       return SavedPost.fromJson(Map<String, dynamic>.from(jsonDecode(json)));
     }).toList();
 
-    // 2. Process thumbnails and separation WITHOUT calling setState yet
-    final newData = await _getSeparatedMediaFromList(loadedPosts);
+    // 2. Additive Logic: Identify only items we don't already have
+    final existingPaths = _savedPosts.map((p) => p.localPath).toSet();
+    final newPosts = loadedPosts
+        .where((p) => !existingPaths.contains(p.localPath))
+        .toList();
 
-    // 3. Update the UI exactly once
+    if (newPosts.isEmpty) {
+      // Just in case check for deletions (items in existing but not in loaded)
+      final loadedPaths = loadedPosts.map((p) => p.localPath).toSet();
+      if (_savedPosts.any((p) => !loadedPaths.contains(p.localPath))) {
+        // Handle deletion case (smoother way is to remove directly, but reload is safer for deletions)
+        final newData = await _getSeparatedMediaFromList(loadedPosts);
+        if (mounted) {
+          setState(() {
+            _savedPosts = loadedPosts;
+            _separatedMedia = newData;
+            _isLoadingMedia = false;
+          });
+        }
+      }
+      return;
+    }
+
+    // 3. Process ONLY NEW thumbnails/separation
+    final newSeparated = await _getSeparatedMediaFromList(newPosts);
+
+    // 4. Update the UI - Insert new items at the beginning
     if (mounted) {
       setState(() {
-        _savedPosts = loadedPosts;
-        _separatedMedia = newData;
+        _savedPosts.insertAll(0, newPosts); // Add to raw list
+        _separatedMedia ??= [];
+        // Since we reverse in _getSeparatedMediaFromList, but we want newest on top
+        // And _getSeparatedMediaFromList already processes posts in reverse of the input list.
+        _separatedMedia!.insertAll(0, newSeparated);
         _isLoadingMedia = false;
       });
     }
   }
 
   Future<void> _initGalleryData() async {
-    await _loadSavedPosts();
-    await _loadSeparatedMedia(isInitialLoad: true); // Show spinner first time
+    _refreshGalleryDataSilently();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _downloadSubscription?.cancel();
     _linkController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     // 1. Structure: Clean Scaffolding
-    return DefaultTabController(
-      length: 3,
-      initialIndex: widget.initialTabIndex,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: _buildAppBar(),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: _buildAppBar(),
 
-        // 2. Logic: Removed global AnimatedBuilder.
-        // Only the bottom section listens to downloads now.
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- STATIC TOP SECTION (Won't rebuild on download) ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: [
-                  _buildTutorialCard(),
-                  const SizedBox(height: 20),
-                  _buildActionButtons(),
-                  const SizedBox(height: 20),
-                  _buildLinkInput(),
-                  const SizedBox(height: 20),
-                ],
-              ),
+      // 2. Logic: Removed global AnimatedBuilder.
+      // Only the bottom section listens to downloads now.
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- STATIC TOP SECTION (Won't rebuild on download) ---
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              children: [
+                _buildTutorialCard(),
+                const SizedBox(height: 20),
+                _buildActionButtons(),
+                const SizedBox(height: 20),
+                _buildLinkInput(),
+                const SizedBox(height: 20),
+              ],
             ),
+          ),
 
-            // --- DYNAMIC BOTTOM SECTION (Rebuilds on download/tab change) ---
-            Expanded(
-              child: _buildMediaTabsSection(),
-            ),
-          ],
-        ),
+          // --- DYNAMIC BOTTOM SECTION (Rebuilds on download/tab change) ---
+          Expanded(child: _buildMediaTabsSection()),
+        ],
       ),
     );
   }
@@ -166,7 +242,8 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () {
         FocusManager.instance.primaryFocus?.unfocus();
         Navigator.of(context).push(
-            createSlideRoute(const TutorialScreen(), direction: SlideFrom.right));
+          createSlideRoute(const TutorialScreen(), direction: SlideFrom.right),
+        );
       },
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -182,11 +259,14 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("How to Repost a Post?",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Discover step-by-step guidance with our guide.",
-                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(
+                    "How to Repost a Post?",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    "Discover step-by-step guidance with our guide.",
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -289,91 +369,106 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- WIDGET: Media Tabs (The part that listens to downloads) ---
   Widget _buildMediaTabsSection() {
-    // ✅ DEFINE DATA HERE (FIXES ALL ERRORS)
-    final media = _separatedMedia ?? [];
+    return AnimatedBuilder(
+      animation: DownloadManager.instance,
+      builder: (context, _) {
+        // ✅ DEFINE DATA HERE (FIXES ALL ERRORS)
+        final media = _separatedMedia ?? [];
 
-    final activeImages = DownloadManager.instance.activeTasks.where((task) {
-      final existsInSaved = media.any((m) {
-        final post = m['data'] as SavedPost;
-        return post.localPath == task.localPath;
-      });
-      return task.type == 'image' && !existsInSaved;
-    }).toList();
+        final activeImages = DownloadManager.instance.activeTasks.where((task) {
+          final existsInSaved = media.any((m) {
+            final post = m['data'] as SavedPost;
+            return post.localPath == task.localPath;
+          });
+          return task.type == 'image' && !existsInSaved;
+        }).toList();
 
-    final activeVideos = DownloadManager.instance.activeTasks.where((task) {
-      final existsInSaved = media.any((m) {
-        final post = m['data'] as SavedPost;
-        return post.localPath == task.localPath;
-      });
-      return task.type == 'video' && !existsInSaved;
-    }).toList();
+        final activeVideos = DownloadManager.instance.activeTasks.where((task) {
+          final existsInSaved = media.any((m) {
+            final post = m['data'] as SavedPost;
+            return post.localPath == task.localPath;
+          });
+          return task.type == 'video' && !existsInSaved;
+        }).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            "Reposted Media",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(height: 10),
-        const TabBar(
-          indicatorColor: Colors.black,
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.grey,
-          tabs: [
-            Tab(text: "Posts"),
-            Tab(text: "Reels"),
-            Tab(text: "Device Media"),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                "Reposted Media",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.black,
+              labelColor: Colors.black,
+              unselectedLabelColor: Colors.grey,
+              tabs: const [
+                Tab(text: "Posts"),
+                Tab(text: "Reels"),
+                Tab(text: "Device Media"),
+              ],
+            ),
+            Expanded(
+              child: _isLoadingMedia
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Colors.black),
+                    )
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        // POSTS
+                        _buildLimitedGrid(
+                          activeTasks: activeImages,
+                          mediaList: media
+                              .where(
+                                (m) =>
+                                    m['type'] == 'image' &&
+                                    (m['data'] as SavedPost).postUrl !=
+                                        "device_media",
+                              )
+                              .toList(),
+                          viewAllTitle: "All Posts",
+                        ),
+
+                        // REELS
+                        _buildLimitedGrid(
+                          activeTasks: activeVideos,
+                          mediaList: media
+                              .where(
+                                (m) =>
+                                    m['type'] == 'video' &&
+                                    (m['data'] as SavedPost).postUrl !=
+                                        "device_media",
+                              )
+                              .toList(),
+                          viewAllTitle: "All Reels",
+                        ),
+
+                        // DEVICE MEDIA
+                        _buildLimitedGrid(
+                          activeTasks: const [],
+                          mediaList: media
+                              .where(
+                                (m) =>
+                                    (m['data'] as SavedPost).postUrl ==
+                                    "device_media",
+                              )
+                              .toList(),
+                          viewAllTitle: "All Device Media",
+                        ),
+                      ],
+                    ),
+            ),
           ],
-        ),
-        Expanded(
-          child: _isLoadingMedia
-              ? const Center(
-            child: CircularProgressIndicator(color: Colors.black),
-          )
-              : TabBarView(
-            children: [
-              // POSTS
-              _buildLimitedGrid(
-                activeTasks: activeImages,
-                mediaList: media
-                    .where((m) =>
-                m['type'] == 'image' &&
-                    (m['data'] as SavedPost).postUrl != "device_media")
-                    .toList(),
-                viewAllTitle: "All Posts",
-              ),
-
-              // REELS
-              _buildLimitedGrid(
-                activeTasks: activeVideos,
-                mediaList: media
-                    .where((m) =>
-                m['type'] == 'video' &&
-                    (m['data'] as SavedPost).postUrl != "device_media")
-                    .toList(),
-                viewAllTitle: "All Reels",
-              ),
-
-              // DEVICE MEDIA
-              _buildLimitedGrid(
-                activeTasks: const [],
-                mediaList: media
-                    .where((m) =>
-                (m['data'] as SavedPost).postUrl == "device_media")
-                    .toList(),
-                viewAllTitle: "All Device Media",
-              ),
-            ],
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
-
 
   Widget _buildLimitedGrid({
     required List<DownloadTask> activeTasks,
@@ -435,13 +530,19 @@ class _HomeScreenState extends State<HomeScreen> {
               // Inside HomeScreen (usually in the _buildLimitedGrid or similar)
               onPressed: () async {
                 // ✅ Catch the returned list from AllMediaScreen
-                final updatedMedia = await Navigator.of(context).push(createSlideRoute(
-                  AllMediaScreen(title: viewAllTitle, mediaList: filteredMediaList),
-                  direction: SlideFrom.right,
-                ));
+                final updatedMedia = await Navigator.of(context).push(
+                  createSlideRoute(
+                    AllMediaScreen(
+                      title: viewAllTitle,
+                      mediaList: filteredMediaList,
+                    ),
+                    direction: SlideFrom.right,
+                  ),
+                );
 
                 // ✅ If data was returned, update the home state silently
-                if (updatedMedia != null && updatedMedia is List<Map<String, dynamic>>) {
+                if (updatedMedia != null &&
+                    updatedMedia is List<Map<String, dynamic>>) {
                   setState(() {
                     // We don't call _loadSavedPosts() because it triggers a disk read.
                     // We simply update the local _separatedMedia list.
@@ -458,14 +559,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Colors.grey.shade100,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text("View All",
-                      style:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  Text(
+                    "View All",
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
                   SizedBox(width: 6),
                   Icon(Icons.arrow_forward, size: 16),
                 ],
@@ -492,11 +595,11 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(12),
               child: task.thumbnailUrl != null && task.thumbnailUrl!.isNotEmpty
                   ? Image.network(
-                task.thumbnailUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Container(color: Colors.grey[300]),
-              )
+                      task.thumbnailUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Container(color: Colors.grey[300]),
+                    )
                   : Container(color: Colors.grey[300]),
             ),
             Container(
@@ -542,7 +645,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
   Widget _buildGridItem(Map<String, dynamic> postMap) {
     final post = postMap['data'] as SavedPost;
     final thumbPath = postMap['thumbPath'] as String?;
@@ -550,22 +652,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          createSlideRoute(
-            RepostScreen(
-              imageUrl: post.localPath,
-              username: post.username,
-              initialCaption: post.caption,
-              postUrl: post.postUrl,
-              localImagePath: post.localPath,
-              showDeleteButton: true,
-            ),
-            direction: SlideFrom.bottom,
-          ),
-        ).then((_) {
-          _loadSavedPosts();
-          _loadSeparatedMedia(isInitialLoad: false);
-        });
+        Navigator.of(context)
+            .push(
+              createSlideRoute(
+                RepostScreen(
+                  imageUrl: post.localPath,
+                  username: post.username,
+                  initialCaption: post.caption,
+                  postUrl: post.postUrl,
+                  localImagePath: post.localPath,
+                  showDeleteButton: true,
+                  thumbnailUrl: thumbPath ?? "",
+                ),
+                direction: SlideFrom.bottom,
+              ),
+            )
+            .then((deleted) {
+              // Reload silently regardless of deletion for consistency
+              _refreshGalleryDataSilently();
+            });
       },
       child: isVideoItem
           ? _buildReelGridItem(post, thumbPath)
@@ -580,7 +685,7 @@ class _HomeScreenState extends State<HomeScreen> {
         File(post.localPath),
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) =>
-        const Icon(Icons.error, color: Colors.grey),
+            const Icon(Icons.error, color: Colors.grey),
       ),
     );
   }
@@ -593,14 +698,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: thumbPath != null
-              ? Image.file(File(thumbPath),
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity)
+              ? Image.file(
+                  File(thumbPath),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                )
               : Container(
-              color: Colors.grey[300],
-              width: double.infinity,
-              height: double.infinity),
+                  color: Colors.grey[300],
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
         ),
         const Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
       ],
@@ -653,12 +761,17 @@ class _HomeScreenState extends State<HomeScreen> {
       FocusManager.instance.primaryFocus?.unfocus();
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => EditPostScreen(imagePath: image.path),
+        createSlideRoute(
+          EditPostScreen(imagePath: image.path),
+          direction: SlideFrom.bottom,
         ),
-      ).then((_) {
-        _loadSavedPosts();
-        _loadSeparatedMedia();
+      ).then((result) {
+        if (result is Map && result['home'] == true) {
+          if (mounted && result.containsKey('tab')) {
+            _tabController.animateTo(result['tab'] as int);
+          }
+        }
+        _refreshGalleryDataSilently();
       });
     }
   }
@@ -670,16 +783,18 @@ class _HomeScreenState extends State<HomeScreen> {
         _linkController.text = data.text!;
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("⚠️ Please copy a valid Instagram link")),
+          const SnackBar(
+            content: Text("⚠️ Please copy a valid Instagram link"),
+          ),
         );
       }
     }
   }
 
   Future<void> navigateToPreviewScreen(
-      BuildContext context,
-      TextEditingController linkController,
-      ) async {
+    BuildContext context,
+    TextEditingController linkController,
+  ) async {
     String link = linkController.text.trim();
 
     if (!link.contains("instagram.com/")) {
@@ -691,9 +806,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("❌ No Internet Connection")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("❌ No Internet Connection")));
       return;
     }
     final prefs = await SharedPreferences.getInstance();
@@ -706,7 +821,9 @@ class _HomeScreenState extends State<HomeScreen> {
         // User cancelled login or failed, so we stop here.
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("⚠️ Login required to download content")),
+            const SnackBar(
+              content: Text("⚠️ Login required to download content"),
+            ),
           );
         }
         return;
@@ -722,16 +839,20 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            progressTimer ??=
-                Timer.periodic(const Duration(milliseconds: 100), (timer) {
-                  if (fakeProgress < 0.95) {
-                    setDialogState(() => fakeProgress += 0.01);
-                  } else {
-                    timer.cancel();
-                  }
-                });
+            progressTimer ??= Timer.periodic(
+              const Duration(milliseconds: 100),
+              (timer) {
+                if (fakeProgress < 0.95) {
+                  setDialogState(() => fakeProgress += 0.01);
+                } else {
+                  timer.cancel();
+                }
+              },
+            );
             return StatusDialog(
-                type: DialogType.fetching, progress: fakeProgress);
+              type: DialogType.fetching,
+              progress: fakeProgress,
+            );
           },
         );
       },
@@ -741,10 +862,12 @@ class _HomeScreenState extends State<HomeScreen> {
       final String apiUrl = "${_apiBaseUrl}download_media";
       String deviceId = await _getDeviceId();
 
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        body: {"instagramURL": link, "deviceId": deviceId},
-      ).timeout(const Duration(seconds: 120));
+      final response = await http
+          .post(
+            Uri.parse(apiUrl),
+            body: {"instagramURL": link, "deviceId": deviceId},
+          )
+          .timeout(const Duration(seconds: 120));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -780,30 +903,40 @@ class _HomeScreenState extends State<HomeScreen> {
         FocusManager.instance.primaryFocus?.unfocus();
 
         if (context.mounted) {
-          Navigator.of(context).push(
-            createSlideRoute(
-              PreviewScreen(
-                mediaItems: mediaItems,
-                username: username,
-                caption: caption,
-                postUrl: link,
-              ),
-              direction: SlideFrom.bottom,
-            ),
-          ).then((_) {
-            FocusManager.instance.primaryFocus?.unfocus();
-            _loadSavedPosts();
-            _loadSeparatedMedia(isInitialLoad: false);
-          });
+          Navigator.of(context)
+              .push(
+                createSlideRoute(
+                  PreviewScreen(
+                    mediaItems: mediaItems,
+                    username: username,
+                    caption: caption,
+                    postUrl: link,
+                  ),
+                  direction: SlideFrom.bottom,
+                ),
+              )
+              .then((result) {
+                FocusManager.instance.primaryFocus?.unfocus();
+                if (result is Map && result['home'] == true) {
+                  if (mounted && result.containsKey('tab')) {
+                    _tabController.animateTo(result['tab'] as int);
+                  }
+                }
+                _refreshGalleryDataSilently();
+              });
         }
       } else {
         throw Exception("Server error (${response.statusCode})");
       }
-    }on TimeoutException catch (_) {
+    } on TimeoutException catch (_) {
       if (context.mounted) {
         Navigator.of(context).pop(); // Close the status dialog
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("⌛ The server took too long to respond. Please try again.")),
+          const SnackBar(
+            content: Text(
+              "⌛ The server took too long to respond. Please try again.",
+            ),
+          ),
         );
       }
     } on SocketException catch (e) {
@@ -816,16 +949,17 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       progressTimer?.cancel();
       if (context.mounted) Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
     }
   }
 
   void navigateToSettingScreen() {
     FocusManager.instance.primaryFocus?.unfocus();
     Navigator.of(context).push(
-        createSlideRoute(const SettingsScreen(), direction: SlideFrom.right));
+      createSlideRoute(const SettingsScreen(), direction: SlideFrom.right),
+    );
   }
 
   Future<String> _getDeviceId() async {
@@ -845,80 +979,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // --- DATA LOADING ---
-
-  Future<void> _loadSavedPosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final dynamic savedRaw = prefs.get('savedPosts');
-    if (savedRaw is String) await prefs.remove('savedPosts');
-
-    final savedData = prefs.getStringList('savedPosts') ?? [];
-    try {
-      final List<SavedPost> loadedPosts = savedData.map((json) {
-        return SavedPost.fromJson(Map<String, dynamic>.from(jsonDecode(json)));
-      }).toList();
-      setState(() => _savedPosts = loadedPosts);
-    } catch (e) {
-      print("❌ Error parsing saved posts: $e");
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _getSeparatedMedia() async {
-    List<Map<String, dynamic>> separated = [];
-    for (final post in _savedPosts.reversed) {
-      final path = post.localPath;
-      if (!File(path).existsSync()) continue;
-
-      if (path.toLowerCase().endsWith(".mp4")) {
-        String? thumbPath;
-        try {
-          thumbPath = await VideoThumbnail.thumbnailFile(
-            video: path,
-            imageFormat: ImageFormat.JPEG,
-            maxHeight: 200,
-            quality: 75,
-          );
-        } catch (e) {
-          print("Thumbnail error: $e");
-        }
-        separated.add(
-            {"type": "video", "data": post, "thumbPath": thumbPath});
-      } else {
-        separated.add({"type": "image", "data": post});
-      }
-    }
-    return separated;
-  }
-
-  Future<void> _loadSeparatedMedia({bool isInitialLoad = false}) async {
-    if (isInitialLoad && _separatedMedia == null) {
-      setState(() => _isLoadingMedia = true);
-    }
-
-    final newData = await _getSeparatedMedia();
-
-    if (!mounted) return;
-
-    setState(() {
-      if (_separatedMedia == null || isInitialLoad) {
-        // First time
-        _separatedMedia = newData;
-      } else {
-        // 🔥 APPEND ONLY NEW ITEMS
-        final existingPaths = _separatedMedia!
-            .map((e) => (e['data'] as SavedPost).localPath)
-            .toSet();
-
-        final onlyNewItems = newData.where((e) {
-          final post = e['data'] as SavedPost;
-          return !existingPaths.contains(post.localPath);
-        }).toList();
-
-        _separatedMedia!.insertAll(0, onlyNewItems); // newest on top
-      }
-
-      _isLoadingMedia = false;
-    });
-  }
 
   Widget _buildFinalDownloadedItem(DownloadTask task) {
     ImageProvider? imageProvider;
@@ -944,8 +1004,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Image(
               image: imageProvider,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  Container(color: Colors.grey[300]),
+              errorBuilder: (_, __, ___) => Container(color: Colors.grey[300]),
             )
           else
             Container(color: Colors.grey[300]),
@@ -963,7 +1022,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _getSeparatedMediaFromList(List<SavedPost> posts) async {
+  Future<List<Map<String, dynamic>>> _getSeparatedMediaFromList(
+    List<SavedPost> posts,
+  ) async {
     List<Map<String, dynamic>> separated = [];
 
     for (final post in posts.reversed) {
@@ -973,7 +1034,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (path.toLowerCase().endsWith(".mp4")) {
         // FIX: Check if we already have this thumbnail in current state to avoid re-generating
         String? existingThumb = _separatedMedia?.firstWhere(
-              (m) => (m['data'] as SavedPost).localPath == path,
+          (m) => (m['data'] as SavedPost).localPath == path,
           orElse: () => {},
         )['thumbPath'];
 
@@ -987,7 +1048,9 @@ class _HomeScreenState extends State<HomeScreen> {
               maxHeight: 200,
               quality: 75,
             );
-          } catch (e) { print("Thumbnail error: $e"); }
+          } catch (e) {
+            print("Thumbnail error: $e");
+          }
         }
         separated.add({"type": "video", "data": post, "thumbPath": thumbPath});
       } else {
@@ -996,6 +1059,4 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return separated;
   }
-
-
 }

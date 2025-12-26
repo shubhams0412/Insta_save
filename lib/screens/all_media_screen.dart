@@ -80,7 +80,9 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete Items?"),
-        content: Text("Are you sure you want to delete ${_selectedPaths.length} items?"),
+        content: Text(
+          "Are you sure you want to delete ${_selectedPaths.length} items?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -155,7 +157,9 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       debugPrint("❌ Critical delete error: $e");
       if (mounted) {
         setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
   }
@@ -180,7 +184,9 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
         backgroundColor: Colors.white,
         appBar: _buildAppBar(),
         body: _isDeleting
-            ? const Center(child: CircularProgressIndicator(color: Colors.black))
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.black),
+              )
             : _currentList.isEmpty
             ? _buildEmptyState()
             : _buildGrid(),
@@ -204,25 +210,38 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       ),
       title: Text(
         _isSelectionMode ? "${_selectedPaths.length} Selected" : widget.title,
-        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
       ),
       actions: [
         if (_isSelectionMode) ...[
           TextButton(
             onPressed: _toggleSelectAll,
             child: Text(
-              _selectedPaths.length == _currentList.length ? "Deselect All" : "Select All",
-              style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              _selectedPaths.length == _currentList.length
+                  ? "Deselect All"
+                  : "Select All",
+              style: const TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.red),
-            onPressed: _selectedPaths.isNotEmpty ? _showDeleteConfirmation : null,
+            onPressed: _selectedPaths.isNotEmpty
+                ? _showDeleteConfirmation
+                : null,
           ),
         ] else ...[
           TextButton(
             onPressed: _toggleSelectionMode,
-            child: const Text("Select", style: TextStyle(color: Colors.black, fontSize: 16)),
+            child: const Text(
+              "Select",
+              style: TextStyle(color: Colors.black, fontSize: 16),
+            ),
           ),
         ],
         const SizedBox(width: 8),
@@ -235,7 +254,11 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.perm_media_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(
+            Icons.perm_media_outlined,
+            size: 64,
+            color: Colors.grey.shade300,
+          ),
           const SizedBox(height: 16),
           Text("No media found", style: TextStyle(color: Colors.grey.shade500)),
         ],
@@ -269,19 +292,32 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
               _toggleItemSelection(post.localPath);
             } else {
               FocusManager.instance.primaryFocus?.unfocus();
-              Navigator.of(context).push(
-                createSlideRoute(
-                  RepostScreen(
-                    imageUrl: post.localPath,
-                    username: post.username,
-                    initialCaption: post.caption,
-                    postUrl: post.postUrl,
-                    localImagePath: post.localPath,
-                    showDeleteButton: true,
-                  ),
-                  direction: SlideFrom.bottom,
-                ),
-              );
+              Navigator.of(context)
+                  .push(
+                    createSlideRoute(
+                      RepostScreen(
+                        imageUrl: post.localPath,
+                        username: post.username,
+                        initialCaption: post.caption,
+                        postUrl: post.postUrl,
+                        localImagePath: post.localPath,
+                        showDeleteButton: true,
+                        thumbnailUrl: postMap['thumbPath'] as String,
+                      ),
+                      direction: SlideFrom.bottom,
+                    ),
+                  )
+                  .then((deleted) async {
+                    // If item was deleted, remove from list
+                    if (deleted == true) {
+                      setState(() {
+                        _currentList.removeWhere((item) {
+                          final p = item['data'] as SavedPost;
+                          return p.localPath == post.localPath;
+                        });
+                      });
+                    }
+                  });
             }
           },
           onLongPress: () {
@@ -351,7 +387,9 @@ class MediaGridItem extends StatelessWidget {
                   color: Colors.white,
                 ),
                 child: Icon(
-                  isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                  isSelected
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
                   color: isSelected ? Colors.blue : Colors.grey,
                   size: 24,
                 ),
@@ -371,10 +409,11 @@ class MediaGridItem extends StatelessWidget {
         children: [
           thumbPath != null
               ? Image.file(
-            File(thumbPath!),
-            fit: BoxFit.cover,
-            errorBuilder: (_,__,___) => Container(color: Colors.grey[300]),
-          )
+                  File(thumbPath!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Container(color: Colors.grey[300]),
+                )
               : Container(color: Colors.grey[300]),
           const Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
         ],
@@ -383,7 +422,8 @@ class MediaGridItem extends StatelessWidget {
       return Image.file(
         File(post.localPath),
         fit: BoxFit.cover,
-        errorBuilder: (_,__,___) => const Icon(Icons.broken_image, color: Colors.grey),
+        errorBuilder: (_, __, ___) =>
+            const Icon(Icons.broken_image, color: Colors.grey),
       );
     }
   }

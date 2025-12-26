@@ -65,20 +65,27 @@ class _EditPostScreenState extends State<EditPostScreen> {
 
       // 5. Navigate
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          createSlideRoute(
-            RepostScreen(
-              imageUrl: devicePost.localPath,
-              username: devicePost.username,
-              initialCaption: devicePost.caption,
-              postUrl: devicePost.postUrl,
-              localImagePath: devicePost.localPath,
-              showDeleteButton: true, // Changed to true so user can manage it later
-              showHomeButton: true,
-            ),
-            direction: SlideFrom.right,
-          ),
-        );
+        Navigator.of(context)
+            .push(
+              createSlideRoute(
+                RepostScreen(
+                  imageUrl: devicePost.localPath,
+                  username: devicePost.username,
+                  initialCaption: devicePost.caption,
+                  postUrl: devicePost.postUrl,
+                  localImagePath: devicePost.localPath,
+                  showDeleteButton: true,
+                  showHomeButton: true,
+                  thumbnailUrl: devicePost.localPath,
+                ),
+                direction: SlideFrom.right,
+              ),
+            )
+            .then((result) {
+              if (mounted) {
+                Navigator.of(context).pop(result);
+              }
+            });
       }
     } catch (e) {
       _showSnackBar("Error saving post: $e");
@@ -107,7 +114,9 @@ class _EditPostScreenState extends State<EditPostScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // --- UI BUILD ---
@@ -131,7 +140,11 @@ class _EditPostScreenState extends State<EditPostScreen> {
                     const SizedBox(height: 30),
                     _buildForm(),
                     // Add extra padding at bottom so keyboard doesn't hide last field
-                    SizedBox(height: MediaQuery.of(context).viewInsets.bottom > 0 ? 20 : 0),
+                    SizedBox(
+                      height: MediaQuery.of(context).viewInsets.bottom > 0
+                          ? 20
+                          : 0,
+                    ),
                   ],
                 ),
               ),
@@ -178,7 +191,9 @@ class _EditPostScreenState extends State<EditPostScreen> {
           errorBuilder: (_, __, ___) => Container(
             height: 200,
             color: Colors.grey.shade200,
-            child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+            child: const Center(
+              child: Icon(Icons.broken_image, color: Colors.grey),
+            ),
           ),
         ),
       ),
@@ -207,7 +222,10 @@ class _EditPostScreenState extends State<EditPostScreen> {
               hintText: "Type username...",
               hintStyle: TextStyle(color: Colors.grey),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
         ),
@@ -223,12 +241,16 @@ class _EditPostScreenState extends State<EditPostScreen> {
             controller: _captionController,
             maxLines: 5,
             minLines: 3, // Makes it look like a text area
-            textCapitalization: TextCapitalization.sentences, // Capitalize first letters
+            textCapitalization:
+                TextCapitalization.sentences, // Capitalize first letters
             decoration: const InputDecoration(
               hintText: "Type caption...",
               hintStyle: TextStyle(color: Colors.grey),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
         ),
@@ -254,21 +276,31 @@ class _EditPostScreenState extends State<EditPostScreen> {
           ),
           child: _isSaving
               ? const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-          )
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
               : const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "Next",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              SizedBox(width: 8),
-              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white)
-            ],
-          ),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Next",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
         ),
       ),
     );

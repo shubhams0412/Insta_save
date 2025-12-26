@@ -11,7 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
-import 'package:insta_save/screens/home_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image/image.dart' as img;
+import 'package:url_launcher/url_launcher.dart';
 
 class RepostScreen extends StatefulWidget {
   final String imageUrl;
@@ -21,6 +23,7 @@ class RepostScreen extends StatefulWidget {
   final String localImagePath;
   final bool showDeleteButton;
   final bool showHomeButton;
+  final String thumbnailUrl;
 
   const RepostScreen({
     super.key,
@@ -29,6 +32,7 @@ class RepostScreen extends StatefulWidget {
     required this.initialCaption,
     required this.postUrl,
     required this.localImagePath,
+    required this.thumbnailUrl,
     this.showDeleteButton = false,
     this.showHomeButton = false,
   });
@@ -68,6 +72,9 @@ class _RepostScreenState extends State<RepostScreen> {
   void initState() {
     super.initState();
     _captionController = TextEditingController(text: widget.initialCaption);
+    _captionController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _checkIfVideo();
     _loadImageAspectRatio();
   }
@@ -84,7 +91,9 @@ class _RepostScreenState extends State<RepostScreen> {
   void _checkIfVideo() async {
     if (widget.localImagePath.toLowerCase().endsWith('.mp4')) {
       _isVideo = true;
-      _videoController = VideoPlayerController.file(File(widget.localImagePath));
+      _videoController = VideoPlayerController.file(
+        File(widget.localImagePath),
+      );
 
       try {
         await _videoController!.initialize();
@@ -103,24 +112,58 @@ class _RepostScreenState extends State<RepostScreen> {
   }
 
   Future<void> _loadImageAspectRatio() async {
-    if (_isVideo) return;
-    final file = File(widget.localImagePath);
+    final String pathToCheck = _isVideo
+        ? widget.thumbnailUrl
+        : widget.localImagePath;
+
+    // Handle Network Image
+    if (pathToCheck.startsWith('http')) {
+      final Image image = Image.network(pathToCheck);
+      final ImageStream stream = image.image.resolve(
+        const ImageConfiguration(),
+      );
+      stream.addListener(
+        ImageStreamListener(
+          (ImageInfo info, bool _) {
+            if (mounted) {
+              setState(() {
+                _imageAspectRatio = info.image.width / info.image.height;
+                _isLoadingImage = false;
+              });
+            }
+          },
+          onError: (_, __) {
+            if (mounted) setState(() => _isLoadingImage = false);
+          },
+        ),
+      );
+      return;
+    }
+
+    // Handle Local File
+    final file = File(pathToCheck);
     if (!file.existsSync()) {
       setState(() => _isLoadingImage = false);
       return;
     }
+
     final Image image = Image.file(file);
     final ImageStream stream = image.image.resolve(const ImageConfiguration());
-    stream.addListener(ImageStreamListener((ImageInfo info, bool _) {
-      if (mounted) {
-        setState(() {
-          _imageAspectRatio = info.image.width / info.image.height;
-          _isLoadingImage = false;
-        });
-      }
-    }, onError: (_, __) {
-      if (mounted) setState(() => _isLoadingImage = false);
-    }));
+    stream.addListener(
+      ImageStreamListener(
+        (ImageInfo info, bool _) {
+          if (mounted) {
+            setState(() {
+              _imageAspectRatio = info.image.width / info.image.height;
+              _isLoadingImage = false;
+            });
+          }
+        },
+        onError: (_, __) {
+          if (mounted) setState(() => _isLoadingImage = false);
+        },
+      ),
+    );
   }
 
   // --- LOGIC: FFmpeg Font Preparation ---
@@ -142,39 +185,149 @@ class _RepostScreenState extends State<RepostScreen> {
   Future<File> renderVideoWithCustomStyle() async {
     final fontPath = await _prepareFontFile();
     final tempDir = await getTemporaryDirectory();
-    final outputPath = '${tempDir.path}/repost_${DateTime.now().millisecondsSinceEpoch}.mp4';
+    final outputPath =
+        '${tempDir.path}/repost_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
     final cleanName = widget.username.replaceAll('@', '').trim();
 
-    String toHex(Color c) => c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase();
-    final textColorHex = toHex(_tagTextColor);
-    final bgColorHex = toHex(_tagBackgroundColor);
+    String toHex(Color c) =>
+        c.value.toRadixString(16).padLeft(8, '0').substring(2);
 
-    // Position logic (Mapping alignment to FFmpeg coordinates)
-    String xPos = "20";
-    String yPos = "20";
-    if (_tagAlignment == Alignment.bottomLeft) { xPos = "20"; yPos = "h-th-40"; }
-    else if (_tagAlignment == Alignment.bottomRight) { xPos = "w-tw-20"; yPos = "h-th-40"; }
-    else if (_tagAlignment == Alignment.topRight) { xPos = "w-tw-20"; yPos = "40"; }
-    else { xPos = "20"; yPos = "40"; }
+    final textColor = toHex(_tagTextColor);
+    final bgColor = toHex(_tagBackgroundColor);
 
-    // FFmpeg command with explicit fontfile and box background
-    final command = "-y -i \"${widget.localImagePath}\" " +
-        "-vf \"drawtext=fontfile='$fontPath':text='@$cleanName':x=$xPos:y=$yPos:fontsize=40:fontcolor=0x$textColorHex:box=1:boxcolor=0x$bgColorHex@$_tagBackgroundOpacity:boxborderw=12\" " +
-        "-c:v libx264 -preset ultrafast -c:a copy \"$outputPath\"";
+    final textOpacity = _tagTextOpacity.toStringAsFixed(2);
+    final bgOpacity = _tagBackgroundOpacity.toStringAsFixed(2);
 
-    debugPrint("Starting FFmpeg: $command");
+    // 🔖 Unicode icon
+    final tagText = "@$cleanName";
+
+    // Alignment → FFmpeg position
+    String x = "20";
+    String y = "20";
+
+    if (_tagAlignment == Alignment.bottomLeft) {
+      x = "20";
+      y = "h-th-30";
+    } else if (_tagAlignment == Alignment.bottomRight) {
+      x = "w-tw-20";
+      y = "h-th-30";
+    } else if (_tagAlignment == Alignment.topRight) {
+      x = "w-tw-20";
+      y = "30";
+    } else {
+      x = "20";
+      y = "30";
+    }
+
+    final command =
+        '-y -i "${widget.localImagePath}" '
+        '-vf "drawtext='
+        'fontfile=${fontPath}:'
+        'text=${tagText}:'
+        'x=${x}:'
+        'y=${y}:'
+        'fontsize=38:'
+        'fontcolor=0x${textColor}@${textOpacity}:'
+        'box=1:'
+        'boxcolor=0x${bgColor}@${bgOpacity}:'
+        'boxborderw=14" '
+        '-c:v libx264 -preset ultrafast -pix_fmt yuv420p '
+        '"$outputPath"';
+
+    debugPrint("🎬 FFmpeg CMD:\n$command");
 
     final session = await FFmpegKit.execute(command);
-    final returnCode = await session.getReturnCode();
+    final rc = await session.getReturnCode();
 
-    if (ReturnCode.isSuccess(returnCode)) {
-      debugPrint("FFmpeg Success");
+    if (ReturnCode.isSuccess(rc)) {
       return File(outputPath);
     } else {
       final logs = await session.getAllLogsAsString();
-      debugPrint("FFmpeg Failed: $logs");
-      throw Exception("FFmpeg failed to generate video overlay.");
+      debugPrint("❌ FFmpeg Error:\n$logs");
+      throw Exception("FFmpeg render failed");
     }
+  }
+
+  // --- LOGIC: Render Image with Tag ---
+
+  Future<File> renderImageWithTag() async {
+    final tempDir = await getTemporaryDirectory();
+    final outputPath =
+        '${tempDir.path}/repost_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+    // Load the image
+    final imageFile = File(widget.localImagePath);
+    final imageBytes = await imageFile.readAsBytes();
+    final image = img.decodeImage(imageBytes);
+
+    if (image == null) {
+      throw Exception("Failed to decode image");
+    }
+
+    final cleanName = widget.username.replaceAll('@', '').trim();
+    final tagText = "@$cleanName";
+
+    // Calculate positions based on alignment
+    int x, y;
+    final padding = 20;
+    final fontSize = (image.height / 28).round();
+    final textWidth = tagText.length * (fontSize * 0.6).round();
+    final textHeight = fontSize + 8;
+
+    if (_tagAlignment == Alignment.bottomLeft) {
+      x = padding;
+      y = image.height - textHeight - padding;
+    } else if (_tagAlignment == Alignment.bottomRight) {
+      x = image.width - textWidth - padding;
+      y = image.height - textHeight - padding;
+    } else if (_tagAlignment == Alignment.topRight) {
+      x = image.width - textWidth - padding;
+      y = padding;
+    } else {
+      x = padding;
+      y = padding;
+    }
+
+    // Draw background rectangle
+    final bgColor = img.ColorRgba8(
+      _tagBackgroundColor.red,
+      _tagBackgroundColor.green,
+      _tagBackgroundColor.blue,
+      (_tagBackgroundOpacity * 255).toInt(),
+    );
+
+    img.fillRect(
+      image,
+      x1: x - 8,
+      y1: y - 4,
+      x2: x + textWidth + 8,
+      y2: y + textHeight + 4,
+      color: bgColor,
+    );
+
+    // Draw text
+    final textColor = img.ColorRgba8(
+      _tagTextColor.red,
+      _tagTextColor.green,
+      _tagTextColor.blue,
+      (_tagTextOpacity * 255).toInt(),
+    );
+
+    img.drawString(
+      image,
+      tagText,
+      font: img.arial48,
+      x: x,
+      y: y,
+      color: textColor,
+    );
+
+    // Save the modified image
+    final outputFile = File(outputPath);
+    await outputFile.writeAsBytes(img.encodeJpg(image));
+
+    return outputFile;
   }
 
   // --- LOGIC: Handle Repost (Share Video Only) ---
@@ -186,33 +339,41 @@ class _RepostScreenState extends State<RepostScreen> {
     try {
       String pathToSend = widget.localImagePath;
 
-      if (_isVideo && _isTagVisible) {
-        final renderedFile = await renderVideoWithCustomStyle();
-        pathToSend = renderedFile.path;
+      if (_isTagVisible) {
+        if (_isVideo) {
+          final renderedFile = await renderVideoWithCustomStyle();
+          pathToSend = renderedFile.path;
+        } else {
+          final renderedFile = await renderImageWithTag();
+          pathToSend = renderedFile.path;
+        }
       }
+
+      // Determine media type
+      final String mediaType = _isVideo ? 'video' : 'image';
 
       // Save to MediaStore
       final String? uriString = await _mediaStoreChannel.invokeMethod<String>(
-          'saveVideo',
-          {'path': pathToSend}
+        'saveMedia',
+        {'path': pathToSend, 'mediaType': mediaType},
       );
 
       if (uriString != null) {
-        // ✅ This now matches the name in MainActivity
         await _instaChannel.invokeMethod('repostToInstagram', {
           'uri': uriString,
+          'mediaType': mediaType,
         });
       }
-
     } on PlatformException catch (e) {
       debugPrint("Native Error: ${e.message}");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Platform Error: ${e.message}")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Platform Error: ${e.message}")));
     } catch (e) {
       debugPrint("General Error: $e");
     } finally {
-      if (mounted) setState(() => _isReposting = false); // ✅ Always stops spinner
+      if (mounted)
+        setState(() => _isReposting = false); // ✅ Always stops spinner
     }
   }
 
@@ -250,7 +411,37 @@ class _RepostScreenState extends State<RepostScreen> {
     );
   }
 
+  Future<void> _showDeleteDialog() async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Post?"),
+        content: const Text("Are you sure you want to delete this post?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.black)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deletePostFromList();
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _deletePostFromList() async {
+    // 1. Stop playback immediately
+    if (_videoController != null) {
+      await _videoController!.pause();
+      await _videoController!.dispose();
+      _videoController = null;
+    }
+
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
@@ -260,11 +451,10 @@ class _RepostScreenState extends State<RepostScreen> {
         return decoded['localPath'] == widget.localImagePath;
       });
       await prefs.setStringList('savedPosts', savedData);
+
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const HomeScreen(initialTabIndex: 0)),
-              (route) => false,
-        );
+        // Pop back to previous screen - it will handle the reload
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       debugPrint("Error deleting: $e");
@@ -298,17 +488,40 @@ class _RepostScreenState extends State<RepostScreen> {
       backgroundColor: Colors.white,
       elevation: 0,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-        onPressed: () => Navigator.of(context).pop(),
+      leadingWidth: widget.showHomeButton ? 100 : 56,
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          if (widget.showHomeButton)
+            IconButton(
+              icon: const Icon(Icons.home_outlined, color: Colors.black),
+              onPressed: () {
+                int targetTab = _isVideo ? 1 : 0;
+                if (widget.postUrl == "device_media") {
+                  targetTab = 2;
+                }
+                Navigator.of(context).pop({'home': true, 'tab': targetTab});
+              },
+            ),
+        ],
       ),
-      title: Text(widget.username, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      title: Text(
+        widget.username,
+        style: const TextStyle(
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
       centerTitle: true,
       actions: [
         if (widget.showDeleteButton)
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.red),
-            onPressed: _deletePostFromList,
+            onPressed: _showDeleteDialog,
           ),
       ],
     );
@@ -320,28 +533,84 @@ class _RepostScreenState extends State<RepostScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_isVideo && _videoController != null && _videoController!.value.isInitialized)
+          if (_isVideo &&
+              _videoController != null &&
+              _videoController!.value.isInitialized)
             VideoPlayer(_videoController!)
           else
-            Image.file(File(widget.localImagePath), fit: BoxFit.cover),
+            Builder(
+              builder: (context) {
+                // Determine the correct path to show
+                final path = _isVideo
+                    ? widget.thumbnailUrl
+                    : widget.localImagePath;
+
+                if (path.isEmpty) {
+                  return Container(color: Colors.grey[300]);
+                }
+
+                if (path.startsWith('http')) {
+                  return CachedNetworkImage(
+                    imageUrl: path,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) =>
+                        Container(color: Colors.grey[300]),
+                  );
+                } else {
+                  return Image.file(
+                    File(path),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Container(color: Colors.grey[300]),
+                  );
+                }
+              },
+            ),
           if (_isTagVisible)
             Align(
               alignment: _tagAlignment,
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _tagBackgroundColor.withOpacity(_tagBackgroundOpacity),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.bookmark_border, size: 16, color: _tagIconColor.withOpacity(_tagIconOpacity)),
-                      const SizedBox(width: 4),
-                      Text(widget.username, style: TextStyle(fontWeight: FontWeight.w600, color: _tagTextColor.withOpacity(_tagTextOpacity))),
-                    ],
+                child: GestureDetector(
+                  onTap: () async {
+                    final username = widget.username.replaceAll('@', '').trim();
+                    final url = 'https://www.instagram.com/$username/';
+                    if (await canLaunchUrl(Uri.parse(url))) {
+                      await launchUrl(
+                        Uri.parse(url),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _tagBackgroundColor.withOpacity(
+                        _tagBackgroundOpacity,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.bookmark_border,
+                          size: 16,
+                          color: _tagIconColor.withOpacity(_tagIconOpacity),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          widget.username,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _tagTextColor.withOpacity(_tagTextOpacity),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -355,11 +624,11 @@ class _RepostScreenState extends State<RepostScreen> {
                   children: [
                     CircularProgressIndicator(color: Colors.white),
                     SizedBox(height: 12),
-                    Text("Preparing video...", style: TextStyle(color: Colors.white))
+                    Text("Preparing...", style: TextStyle(color: Colors.white)),
                   ],
                 ),
               ),
-            )
+            ),
         ],
       ),
     );
@@ -374,7 +643,8 @@ class _RepostScreenState extends State<RepostScreen> {
             isSelected: _alignmentSelections,
             onPressed: (int index) {
               setState(() {
-                for (int i = 0; i < _alignmentSelections.length; i++) _alignmentSelections[i] = (i == index);
+                for (int i = 0; i < _alignmentSelections.length; i++)
+                  _alignmentSelections[i] = (i == index);
                 if (index == 0) _tagAlignment = Alignment.bottomLeft;
                 if (index == 1) _tagAlignment = Alignment.bottomRight;
                 if (index == 2) _tagAlignment = Alignment.topLeft;
@@ -389,7 +659,10 @@ class _RepostScreenState extends State<RepostScreen> {
             icon: Icon(_isTagVisible ? Icons.visibility : Icons.visibility_off),
             onPressed: () => setState(() => _isTagVisible = !_isTagVisible),
           ),
-          IconButton(icon: const Icon(Icons.palette_outlined), onPressed: _openTagEditor),
+          IconButton(
+            icon: const Icon(Icons.palette_outlined),
+            onPressed: _openTagEditor,
+          ),
         ],
       ),
     );
@@ -400,10 +673,26 @@ class _RepostScreenState extends State<RepostScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: TextField(
         controller: _captionController,
-        maxLines: 3,
+        maxLines: 2,
         decoration: InputDecoration(
           labelText: "Caption",
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          suffixIcon: _captionController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.copy),
+                  onPressed: () {
+                    Clipboard.setData(
+                      ClipboardData(text: _captionController.text),
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Caption copied to clipboard"),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                )
+              : null,
         ),
       ),
     );
@@ -416,12 +705,17 @@ class _RepostScreenState extends State<RepostScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.black,
           minimumSize: const Size(double.infinity, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         onPressed: _isReposting ? null : _handleRepostAction,
         child: _isReposting
             ? const Text("Processing...")
-            : const Text("Repost to Instagram", style: TextStyle(color: Colors.white)),
+            : const Text(
+                "Repost to Instagram",
+                style: TextStyle(color: Colors.white),
+              ),
       ),
     );
   }
@@ -477,23 +771,31 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
     iconOp = widget.initialIconOpacity;
   }
 
-  Color get currentColor => _selectedTab == 0 ? iconColor : (_selectedTab == 1 ? textColor : bgColor);
-  double get currentOp => _selectedTab == 0 ? iconOp : (_selectedTab == 1 ? textOp : bgOp);
+  Color get currentColor =>
+      _selectedTab == 0 ? iconColor : (_selectedTab == 1 ? textColor : bgColor);
+  double get currentOp =>
+      _selectedTab == 0 ? iconOp : (_selectedTab == 1 ? textOp : bgOp);
 
   void _updateColor(Color c) {
     setState(() {
-      if (_selectedTab == 0) iconColor = c;
-      else if (_selectedTab == 1) textColor = c;
-      else bgColor = c;
+      if (_selectedTab == 0)
+        iconColor = c;
+      else if (_selectedTab == 1)
+        textColor = c;
+      else
+        bgColor = c;
     });
     _notifyParent();
   }
 
   void _updateOpacity(double val) {
     setState(() {
-      if (_selectedTab == 0) iconOp = val;
-      else if (_selectedTab == 1) textOp = val;
-      else bgOp = val;
+      if (_selectedTab == 0)
+        iconOp = val;
+      else if (_selectedTab == 1)
+        textOp = val;
+      else
+        bgOp = val;
     });
     _notifyParent();
   }
@@ -514,7 +816,10 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildMiniPreview(),
-              IconButton(icon: const Icon(Icons.check, size: 28), onPressed: () => Navigator.pop(context)),
+              IconButton(
+                icon: const Icon(Icons.check, size: 28),
+                onPressed: () => Navigator.pop(context),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -555,13 +860,31 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
                             paletteType: PaletteType.hsvWithHue,
                           ),
                         ),
-                        actions: [TextButton(child: const Text('Done'), onPressed: () => Navigator.of(ctx).pop())],
+                        actions: [
+                          TextButton(
+                            child: const Text('Done'),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
                       ),
                     );
                   },
                   child: Container(
-                    width: 32, height: 32,
-                    decoration: const BoxDecoration(shape: BoxShape.circle, gradient: SweepGradient(colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.purple, Colors.red])),
+                    width: 32,
+                    height: 32,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: SweepGradient(
+                        colors: [
+                          Colors.red,
+                          Colors.yellow,
+                          Colors.green,
+                          Colors.blue,
+                          Colors.purple,
+                          Colors.red,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -571,11 +894,20 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Opacity", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                "Opacity",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text("${(currentOp * 100).toInt()}%"),
             ],
           ),
-          Slider(value: currentOp, min: 0.0, max: 1.0, activeColor: Colors.black, onChanged: _updateOpacity),
+          Slider(
+            value: currentOp,
+            min: 0.0,
+            max: 1.0,
+            activeColor: Colors.black,
+            onChanged: _updateOpacity,
+          ),
         ],
       ),
     );
@@ -584,13 +916,28 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
   Widget _buildMiniPreview() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: bgColor.withOpacity(bgOp), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade300)),
+      decoration: BoxDecoration(
+        color: bgColor.withOpacity(bgOp),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.bookmark_border, size: 16, color: iconColor.withOpacity(iconOp)),
+          Icon(
+            Icons.bookmark_border,
+            size: 16,
+            color: iconColor.withOpacity(iconOp),
+          ),
           const SizedBox(width: 4),
-          Text(widget.username, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: textColor.withOpacity(textOp))),
+          Text(
+            widget.username,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: textColor.withOpacity(textOp),
+            ),
+          ),
         ],
       ),
     );
@@ -602,8 +949,18 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
       onTap: () => setState(() => _selectedTab = index),
       child: Column(
         children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: isSelected ? Colors.black : Colors.grey)),
-          Container(height: 2, width: 40, color: isSelected ? Colors.black : Colors.transparent),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.black : Colors.grey,
+            ),
+          ),
+          Container(
+            height: 2,
+            width: 40,
+            color: isSelected ? Colors.black : Colors.transparent,
+          ),
         ],
       ),
     );
@@ -614,8 +971,16 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
     return GestureDetector(
       onTap: () => _updateColor(color),
       child: Container(
-        width: 32, height: 32, margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: isSelected ? Border.all(color: Colors.black, width: 2) : Border.all(color: Colors.grey.shade300)),
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected
+              ? Border.all(color: Colors.black, width: 2)
+              : Border.all(color: Colors.grey.shade300),
+        ),
       ),
     );
   }
