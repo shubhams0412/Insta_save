@@ -57,6 +57,9 @@ dependencies:
   social_sharing_plus: ^1.2.3
   ffmpeg_kit_flutter_new: ^4.1.0
   image: ^4.0.17
+  firebase_core: ^2.27.0
+  firebase_remote_config: ^4.3.10
+  home_widget: ^0.7.0
 
 dev_dependencies:
   flutter_test:

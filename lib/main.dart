@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:insta_save/screens/rating_screen.dart';
 import 'package:insta_save/screens/home_screen.dart'; // Renamed for consistency (was home_screen.dart)
@@ -8,6 +9,7 @@ import 'package:insta_save/screens/intro_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
 
   // 1. Lock Orientation to Portrait (Optional but recommended for this type of app)
   await SystemChrome.setPreferredOrientations([
@@ -16,10 +18,13 @@ Future<void> main() async {
   ]);
 
   // 2. Make Status Bar Transparent for edge-to-edge look
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark, // Dark icons for white background
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness:
+          Brightness.dark, // Dark icons for white background
+    ),
+  );
 
   // 3. Load Preferences
   final prefs = await SharedPreferences.getInstance();
@@ -28,10 +33,7 @@ Future<void> main() async {
   // Consider moving rating logic inside Home Screen triggered by an event.
   final bool isRatingSeen = prefs.getBool('isRatingSeen') ?? false;
 
-  runApp(MyApp(
-    isIntroSeen: isIntroSeen,
-    isRatingSeen: isRatingSeen,
-  ));
+  runApp(MyApp(isIntroSeen: isIntroSeen, isRatingSeen: isRatingSeen));
 }
 
 class MyApp extends StatelessWidget {

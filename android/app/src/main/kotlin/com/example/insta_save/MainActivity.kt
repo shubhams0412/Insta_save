@@ -16,9 +16,26 @@ class MainActivity : FlutterActivity() {
 
     private val MEDIA_CHANNEL = "media_store"
     private val INSTA_CHANNEL = "insta_share"
+    private val WIDGET_CHANNEL = "com.example.insta_save/widget_actions"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Handle Widget Actions Channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL).setMethodCallHandler { call, result ->
+             // Initial check if opened from widget
+             if (call.method == "checkWidgetAction") {
+                 val action = intent.action
+                 if (action == "ACTION_WIDGET_OPEN_INSTA" || action == "ACTION_WIDGET_OPEN_GALLERY") {
+                     result.success(action)
+                     intent.action = null // Clear action so it doesn't trigger again on reload
+                 } else {
+                     result.success(null)
+                 }
+             } else {
+                 result.notImplemented()
+             }
+        }
 
         // 🔹 Save video into MediaStore
         MethodChannel(
@@ -117,6 +134,26 @@ class MainActivity : FlutterActivity() {
                 }
             } else {
                 result.notImplemented()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Notify Flutter about the new intent
+        val action = intent.action
+        if (action == "ACTION_WIDGET_OPEN_INSTA" || action == "ACTION_WIDGET_OPEN_GALLERY") {
+            // We need a way to notify Flutter. Since we set up a passive check in configureFlutterEngine,
+            // we might want to also actively INVOKE a method IF the engine is already running.
+            // But 'checkWidgetAction' pattern is safer for startup. 
+            // For running apps, we can try to invokeMethod, but getting the engine reference here is cleaner via the cached engine if possible.
+            // Simplified: The plugin architecture will handle this if we just update the intent, 
+            // BUT Flutter won't know unless IT asks or WE tell it. 
+            // For now, let's rely on Flutter polling 'checkWidgetAction' on Resume, or we can use EventChannel or invokeMethod.
+            
+            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                 MethodChannel(messenger, WIDGET_CHANNEL).invokeMethod("onWidgetAction", action)
             }
         }
     }

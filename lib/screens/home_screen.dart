@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:insta_save/screens/all_media_screen.dart';
 import 'package:insta_save/screens/edit_post_screen.dart';
@@ -45,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen>
   final TextEditingController _linkController = TextEditingController();
   late TabController _tabController;
 
-  List<SavedPost> _savedPosts = [];
   List<Map<String, dynamic>>? _separatedMedia;
   bool _isLoadingMedia = true;
 
@@ -53,6 +53,10 @@ class _HomeScreenState extends State<HomeScreen>
   static const String _apiBaseUrl = "http://13.200.64.163:9081/";
 
   StreamSubscription? _downloadSubscription;
+
+  static const platform = MethodChannel(
+    'com.example.insta_save/widget_actions',
+  );
 
   @override
   void initState() {
@@ -87,6 +91,61 @@ class _HomeScreenState extends State<HomeScreen>
     ) async {
       _refreshGalleryDataSilently();
     });
+
+    // Check for Widget Actions
+    _initWidgetListener();
+  }
+
+  void _initWidgetListener() {
+    // 1. Listen for active events (if app is running)
+    platform.setMethodCallHandler((call) async {
+      if (call.method == "onWidgetAction") {
+        final action = call.arguments as String?;
+        _handleWidgetAction(action);
+      }
+    });
+
+    // 2. Check for initial action (if app was launched from widget)
+    platform.invokeMethod('checkWidgetAction').then((value) {
+      if (value != null && value is String) {
+        _handleWidgetAction(value);
+      }
+    });
+  }
+
+  void _handleWidgetAction(String? action) {
+    if (action == "ACTION_WIDGET_OPEN_INSTA") {
+      // Open Instagram App
+      _openInstagram();
+    } else if (action == "ACTION_WIDGET_OPEN_GALLERY") {
+      // Open Gallery
+      Future.delayed(const Duration(milliseconds: 500), () {
+        pickImageFromGallery();
+      });
+    }
+  }
+
+  Future<void> _openInstagram() async {
+    const url = 'instagram://app'; // Try deep link first
+    final uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback to web link
+        await launchUrl(
+          Uri.parse("https://instagram.com/"),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } catch (e) {
+      debugPrint("Could not open Instagram: $e");
+      // Last resort fallback
+      await launchUrl(
+        Uri.parse("https://instagram.com/"),
+        mode: LaunchMode.externalApplication,
+      );
+    }
   }
 
   @override
@@ -126,40 +185,14 @@ class _HomeScreenState extends State<HomeScreen>
       return SavedPost.fromJson(Map<String, dynamic>.from(jsonDecode(json)));
     }).toList();
 
-    // 2. Additive Logic: Identify only items we don't already have
-    final existingPaths = _savedPosts.map((p) => p.localPath).toSet();
-    final newPosts = loadedPosts
-        .where((p) => !existingPaths.contains(p.localPath))
-        .toList();
+    // 2. Load and Separate Media (Atomic Replace)
+    // We pass the full list to reuse existing thumbnails where possible
+    final newData = await _getSeparatedMediaFromList(loadedPosts);
 
-    if (newPosts.isEmpty) {
-      // Just in case check for deletions (items in existing but not in loaded)
-      final loadedPaths = loadedPosts.map((p) => p.localPath).toSet();
-      if (_savedPosts.any((p) => !loadedPaths.contains(p.localPath))) {
-        // Handle deletion case (smoother way is to remove directly, but reload is safer for deletions)
-        final newData = await _getSeparatedMediaFromList(loadedPosts);
-        if (mounted) {
-          setState(() {
-            _savedPosts = loadedPosts;
-            _separatedMedia = newData;
-            _isLoadingMedia = false;
-          });
-        }
-      }
-      return;
-    }
-
-    // 3. Process ONLY NEW thumbnails/separation
-    final newSeparated = await _getSeparatedMediaFromList(newPosts);
-
-    // 4. Update the UI - Insert new items at the beginning
+    // 3. Update the UI
     if (mounted) {
       setState(() {
-        _savedPosts.insertAll(0, newPosts); // Add to raw list
-        _separatedMedia ??= [];
-        // Since we reverse in _getSeparatedMediaFromList, but we want newest on top
-        // And _getSeparatedMediaFromList already processes posts in reverse of the input list.
-        _separatedMedia!.insertAll(0, newSeparated);
+        _separatedMedia = newData;
         _isLoadingMedia = false;
       });
     }
@@ -530,7 +563,7 @@ class _HomeScreenState extends State<HomeScreen>
               // Inside HomeScreen (usually in the _buildLimitedGrid or similar)
               onPressed: () async {
                 // ✅ Catch the returned list from AllMediaScreen
-                final updatedMedia = await Navigator.of(context).push(
+                await Navigator.of(context).push(
                   createSlideRoute(
                     AllMediaScreen(
                       title: viewAllTitle,
@@ -540,19 +573,9 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 );
 
-                // ✅ If data was returned, update the home state silently
-                if (updatedMedia != null &&
-                    updatedMedia is List<Map<String, dynamic>>) {
-                  setState(() {
-                    // We don't call _loadSavedPosts() because it triggers a disk read.
-                    // We simply update the local _separatedMedia list.
-                    _separatedMedia = updatedMedia;
-                  });
-                } else {
-                  // Fallback: If they deleted something via the RepostScreen inside AllMedia,
-                  // run the silent refresh we built earlier.
-                  _refreshGalleryDataSilently();
-                }
+                // Always refresh from disk/prefs to ensure we have the FULL list (Posts + Reels)
+                // and not just the subset returned by AllMediaScreen.
+                _refreshGalleryDataSilently();
               },
               style: TextButton.styleFrom(
                 foregroundColor: Colors.black,

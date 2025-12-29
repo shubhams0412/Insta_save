@@ -1,0 +1,29 @@
+{
+    "project_info": {
+        "project_number": "477482512154",
+        "project_id": "instasaveandroid",
+        "storage_bucket": "instasaveandroid.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:477482512154:android:3f7c17b08e790bfbb286a3",
+                "android_client_info": {
+                    "package_name": "com.example.insta_save"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyBAndYc-0WZJ_DxcyQQbAMLDL4Bm8owMks"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}

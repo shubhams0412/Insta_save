@@ -41,10 +41,16 @@ class DownloadManager extends ChangeNotifier {
   List<DownloadTask> get activeTasks => _activeTasks;
 
   // ✅ NEW: Stream to notify Home Screen only when a download finishes
-  final StreamController<void> _completionController = StreamController.broadcast();
+  final StreamController<void> _completionController =
+      StreamController.broadcast();
   Stream<void> get onTaskCompleted => _completionController.stream;
 
-  void startBatchDownloads(List<Map<String, String>> mediaItems, String username, String caption, String postUrl) {
+  void startBatchDownloads(
+    List<Map<String, String>> mediaItems,
+    String username,
+    String caption,
+    String postUrl,
+  ) {
     for (int i = 0; i < mediaItems.length; i++) {
       final item = mediaItems[i];
       String type = item['type'] ?? 'image';
@@ -87,7 +93,7 @@ class DownloadManager extends ChangeNotifier {
       int receivedBytes = 0;
 
       response.stream.listen(
-            (List<int> newBytes) {
+        (List<int> newBytes) {
           bytes.addAll(newBytes);
           receivedBytes += newBytes.length;
           task.progress.value = receivedBytes / contentLength;
@@ -140,25 +146,46 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Mutex Lock for saving to history
+  Future<void> _saveLock = Future.value();
+
   Future<void> _saveToHistory(DownloadTask task) async {
-    final prefs = await SharedPreferences.getInstance();
-    final List<String> existingData = prefs.getStringList('savedPosts') ?? [];
+    // Wait for the previous save to complete before starting this one
+    // This chains the futures: prev -> current -> next
+    final completer = Completer<void>();
+    final previousLock = _saveLock;
+    _saveLock = completer.future;
 
-    final newPost = SavedPost(
-      localPath: task.localPath!,
-      username: task.username,
-      caption: task.caption,
-      postUrl: task.postUrl,
-    );
+    try {
+      await previousLock;
+    } catch (e) {
+      // Ignore errors from previous task to proceed
+    }
 
-    bool isDuplicate = existingData.any((item) {
-      final decoded = jsonDecode(item);
-      return decoded['localPath'] == task.localPath;
-    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Reload to ensure we have the absolute latest data from disk
+      await prefs.reload();
+      final List<String> existingData = prefs.getStringList('savedPosts') ?? [];
 
-    if (!isDuplicate) {
-      existingData.add(jsonEncode(newPost.toJson()));
-      await prefs.setStringList('savedPosts', existingData);
+      final newPost = SavedPost(
+        localPath: task.localPath!,
+        username: task.username,
+        caption: task.caption,
+        postUrl: task.postUrl,
+      );
+
+      bool isDuplicate = existingData.any((item) {
+        final decoded = jsonDecode(item);
+        return decoded['localPath'] == task.localPath;
+      });
+
+      if (!isDuplicate) {
+        existingData.add(jsonEncode(newPost.toJson()));
+        await prefs.setStringList('savedPosts', existingData);
+      }
+    } finally {
+      completer.complete();
     }
   }
 

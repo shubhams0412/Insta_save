@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/webview_screen.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'dart:convert';
 
 // Entry point for testing
 void main() {
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: SalesScreen(),
-  ));
+  runApp(
+    const MaterialApp(debugShowCheckedModeBanner: false, home: SalesScreen()),
+  );
 }
 
 class SalesScreen extends StatefulWidget {
@@ -21,14 +22,75 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   // 0 = Annual, 1 = Monthly
   int _selectedPlanIndex = 0;
+  bool _isLoading = true;
+  SalesConfig? _config;
 
-  final List<String> _features = [
-    'Download Unlimited Reels',
-    'Download Stories & Highlights ✨',
-    'Download Post & Videos',
-    'No Ads',
-    'Save Photos & Videos to Gallery',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchRemoteConfig();
+  }
+
+  Future<void> _fetchRemoteConfig() async {
+    try {
+      final remoteConfig = FirebaseRemoteConfig.instance;
+      await remoteConfig.setConfigSettings(
+        RemoteConfigSettings(
+          fetchTimeout: const Duration(minutes: 1),
+          minimumFetchInterval: const Duration(hours: 1),
+        ),
+      );
+
+      // Set default values matching your hardcoded UI
+      await remoteConfig.setDefaults({
+        "sales_screen_config": jsonEncode({
+          "title": {
+            "text": "Instant Saver Premium",
+            "textSize": 28,
+            "textColor": "#FFFFFF",
+          },
+          "subTitle": {
+            "text": "No commitment, cancel anytime",
+            "textSize": 16,
+            "textColor": "#B3FFFFFF",
+          },
+          "features": [
+            {"text": "Download Unlimited Reels"},
+            {"text": "Download Stories & Highlights ✨"},
+            {"text": "Download Post & Videos"},
+            {"text": "No Ads"},
+            {"text": "Save Photos & Videos to Gallery"},
+          ],
+          "plans": [
+            {
+              "title": "Annual",
+              "subtitle": "3-day free trial",
+              "price": "\$19.99",
+              "originalPrice": "\$32.00",
+              "badgeText": "Best - \$0.38 / week",
+            },
+            {
+              "title": "Monthly",
+              "subtitle": "3-day free trial",
+              "price": "\$9.99",
+            },
+          ],
+        }),
+      });
+
+      await remoteConfig.fetchAndActivate();
+      final String jsonString = remoteConfig.getString('sales_screen_config');
+
+      setState(() {
+        _config = SalesConfig.fromJson(jsonDecode(jsonString));
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching remote config: $e');
+      // Fallback if needed, or just stop loading to show defaults/error state
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,185 +99,209 @@ class _SalesScreenState extends State<SalesScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 1. Background Image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/sales_background.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF2C003E), Colors.black],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // 2. Content
-          SafeArea(
-            child: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : Stack(
               children: [
-                // Scrollable Content
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(height: MediaQuery.of(context).size.height * 0.08),
-
-                        // HEADER
-                        const Text(
-                          'Instant Saver Premium',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
+                // 1. Background Image
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/images/sales_background.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFF2C003E), Colors.black],
                         ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'No commitment, cancel anytime',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white70, fontSize: 16),
-                        ),
-                        const SizedBox(height: 30),
-
-                        // FEATURES LIST
-                        _buildSectionHeader('WHAT YOU GET'),
-                        const SizedBox(height: 16),
-                        ..._features.map((f) => _FeatureRow(text: f)),
-                        const SizedBox(height: 30),
-
-                        // PLANS
-                        _buildSectionHeader('CHOOSE PLAN'),
-                        const SizedBox(height: 30),
-
-                        // Plan 0: Annual
-                        _PlanCard(
-                          index: 0,
-                          isSelected: _selectedPlanIndex == 0,
-                          title: 'Annual',
-                          subtitle: '3-day free trial',
-                          price: '\$19.99',
-                          originalPrice: '\$32.00',
-                          badgeText: 'Best - \$0.38 / week',
-                          onTap: () => setState(() => _selectedPlanIndex = 0),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Plan 1: Monthly
-                        _PlanCard(
-                          index: 1,
-                          isSelected: _selectedPlanIndex == 1,
-                          title: 'Monthly',
-                          subtitle: '3-day free trial',
-                          price: '\$9.99',
-                          onTap: () => setState(() => _selectedPlanIndex = 1),
-                        ),
-
-                        const SizedBox(height: 30),
-                      ],
+                      ),
                     ),
                   ),
                 ),
 
-                // Sticky Bottom Section
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+                // 2. Content
+                SafeArea(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Continue Button
-                      Container(
-                        width: double.infinity,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFFFFCF1F),
-                              Color(0xFFF76B17),
-                              Color(0xFFFC01CA),
-                              Color(0xFF7E0BFD)
+                      // Scrollable Content
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.08,
+                              ),
+
+                              // HEADER
+                              Text(
+                                _config?.titleText ?? 'Instant Saver Premium',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _config?.titleColor ?? Colors.white,
+                                  fontSize: _config?.titleSize ?? 28,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _config?.subTitleText ??
+                                    'No commitment, cancel anytime',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color:
+                                      _config?.subTitleColor ?? Colors.white70,
+                                  fontSize: _config?.subTitleSize ?? 16,
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+
+                              // FEATURES LIST
+                              _buildSectionHeader('WHAT YOU GET'),
+                              const SizedBox(height: 16),
+                              if (_config != null)
+                                ..._config!.features.map(
+                                  (f) => _FeatureRow(text: f['text']),
+                                ),
+                              const SizedBox(height: 30),
+
+                              // PLANS
+                              _buildSectionHeader('CHOOSE PLAN'),
+                              const SizedBox(height: 30),
+
+                              if (_config != null)
+                                ...List.generate(_config!.plans.length, (
+                                  index,
+                                ) {
+                                  final plan = _config!.plans[index];
+                                  return Column(
+                                    children: [
+                                      _PlanCard(
+                                        index: index,
+                                        isSelected: _selectedPlanIndex == index,
+                                        title: plan['title'],
+                                        subtitle: plan['subtitle'],
+                                        price: plan['price'],
+                                        originalPrice: plan['originalPrice'],
+                                        badgeText: plan['badgeText'],
+                                        onTap: () => setState(
+                                          () => _selectedPlanIndex = index,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                    ],
+                                  );
+                                }),
+
+                              const SizedBox(height: 30),
                             ],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // TODO: Implement Purchase Logic
-                            print("Selected Plan: $_selectedPlanIndex");
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text(
-                            'Continue',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
 
-                      // Restore
-                      TextButton(
-                        onPressed: () {
-                          // TODO: Implement Restore Logic
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Restore Purchase',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      // Sticky Bottom Section
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Continue Button
+                            Container(
+                              width: double.infinity,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFFFCF1F),
+                                    Color(0xFFF76B17),
+                                    Color(0xFFFC01CA),
+                                    Color(0xFF7E0BFD),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                              ),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  // TODO: Implement Purchase Logic
+                                  print("Selected Plan: $_selectedPlanIndex");
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Continue',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
 
-                      // Footer Links
-                      _FooterLinks(
-                        onPrivacyTap: () => _openWebView(context, 'Privacy Policy', 'https://google.com'),
-                        onTermsTap: () => _openWebView(context, 'Terms of Use', 'https://google.com'),
-                        onCloseTap: () => Navigator.of(context).pop(),
+                            // Restore
+                            TextButton(
+                              onPressed: () {
+                                // TODO: Implement Restore Logic
+                              },
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Restore Purchase',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Footer Links
+                            _FooterLinks(
+                              onPrivacyTap: () => _openWebView(
+                                context,
+                                'Privacy Policy',
+                                'https://google.com',
+                              ),
+                              onTermsTap: () => _openWebView(
+                                context,
+                                'Terms of Use',
+                                'https://google.com',
+                              ),
+                              onCloseTap: () => Navigator.of(context).pop(),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
   void _openWebView(BuildContext context, String title, String url) {
-    Navigator.of(context).push(createSlideRoute(
-      WebViewScreen(title: title, url: url),
-      direction: SlideFrom.right,
-    ));
+    Navigator.of(context).push(
+      createSlideRoute(
+        WebViewScreen(title: title, url: url),
+        direction: SlideFrom.right,
+      ),
+    );
   }
 
   Widget _buildSectionHeader(String title) {
@@ -300,7 +386,9 @@ class _PlanCard extends StatelessWidget {
               color: isSelected ? const Color(0xFF1E1E1E) : Colors.black54,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSelected ? const Color(0xFFE84DFF) : Colors.grey.shade800,
+                color: isSelected
+                    ? const Color(0xFFE84DFF)
+                    : Colors.grey.shade800,
                 width: 2,
               ),
             ),
@@ -312,9 +400,13 @@ class _PlanCard extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? const Color(0xFFE84DFF) : Colors.transparent,
+                    color: isSelected
+                        ? const Color(0xFFE84DFF)
+                        : Colors.transparent,
                     border: Border.all(
-                      color: isSelected ? const Color(0xFFE84DFF) : Colors.grey.shade600,
+                      color: isSelected
+                          ? const Color(0xFFE84DFF)
+                          : Colors.grey.shade600,
                       width: 2,
                     ),
                   ),
@@ -339,7 +431,10 @@ class _PlanCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -380,14 +475,17 @@ class _PlanCard extends StatelessWidget {
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [
                         Color(0xFFFFCF1F),
                         Color(0xFFF76B17),
                         Color(0xFFFC01CA),
-                        Color(0xFF7E0BFD)
+                        Color(0xFF7E0BFD),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(20),
@@ -448,6 +546,50 @@ class _FooterLinks extends StatelessWidget {
   }
 
   Widget _buildDivider() {
-    return const Text(" | ", style: TextStyle(color: Colors.white38, fontSize: 12));
+    return const Text(
+      " | ",
+      style: TextStyle(color: Colors.white38, fontSize: 12),
+    );
+  }
+}
+
+class SalesConfig {
+  final String titleText;
+  final double titleSize;
+  final Color titleColor;
+  final String subTitleText;
+  final double subTitleSize;
+  final Color subTitleColor;
+  final List<Map<String, dynamic>> features;
+  final List<Map<String, dynamic>> plans;
+
+  SalesConfig({
+    required this.titleText,
+    required this.titleSize,
+    required this.titleColor,
+    required this.subTitleText,
+    required this.subTitleSize,
+    required this.subTitleColor,
+    required this.features,
+    required this.plans,
+  });
+
+  factory SalesConfig.fromJson(Map<String, dynamic> json) {
+    return SalesConfig(
+      titleText: json['title']['text'],
+      titleSize: json['title']['textSize'].toDouble(),
+      titleColor: _parseColor(json['title']['textColor']),
+      subTitleText: json['subTitle']['text'],
+      subTitleSize: json['subTitle']['textSize'].toDouble(),
+      subTitleColor: _parseColor(json['subTitle']['textColor']),
+      features: List<Map<String, dynamic>>.from(json['features']),
+      plans: List<Map<String, dynamic>>.from(json['plans']),
+    );
+  }
+
+  static Color _parseColor(String hex) {
+    hex = hex.replaceAll('#', '');
+    if (hex.length == 6) hex = 'FF$hex'; // Add opacity if missing
+    return Color(int.parse(hex, radix: 16));
   }
 }

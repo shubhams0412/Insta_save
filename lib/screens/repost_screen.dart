@@ -42,7 +42,6 @@ class RepostScreen extends StatefulWidget {
 }
 
 class _RepostScreenState extends State<RepostScreen> {
-  final GlobalKey _imageKey = GlobalKey();
   late final TextEditingController _captionController;
 
   static const MethodChannel _mediaStoreChannel = MethodChannel('media_store');
