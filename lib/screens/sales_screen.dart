@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:insta_save/models/remote_config_models.dart';
 import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/services/webview_screen.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'dart:convert';
 
 // Entry point for testing
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await RemoteConfigService().initialize();
   runApp(
     const MaterialApp(debugShowCheckedModeBanner: false, home: SalesScreen()),
   );
@@ -28,67 +30,20 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchRemoteConfig();
+    _loadConfig();
   }
 
-  Future<void> _fetchRemoteConfig() async {
-    try {
-      final remoteConfig = FirebaseRemoteConfig.instance;
-      await remoteConfig.setConfigSettings(
-        RemoteConfigSettings(
-          fetchTimeout: const Duration(minutes: 1),
-          minimumFetchInterval: const Duration(hours: 1),
-        ),
-      );
+  Future<void> _loadConfig() async {
+    // If service not initialized, try to init (safety check)
+    if (RemoteConfigService().salesConfig == null) {
+      await RemoteConfigService().initialize();
+    }
 
-      // Set default values matching your hardcoded UI
-      await remoteConfig.setDefaults({
-        "sales_screen_config": jsonEncode({
-          "title": {
-            "text": "Instant Saver Premium",
-            "textSize": 28,
-            "textColor": "#FFFFFF",
-          },
-          "subTitle": {
-            "text": "No commitment, cancel anytime",
-            "textSize": 16,
-            "textColor": "#B3FFFFFF",
-          },
-          "features": [
-            {"text": "Download Unlimited Reels"},
-            {"text": "Download Stories & Highlights ✨"},
-            {"text": "Download Post & Videos"},
-            {"text": "No Ads"},
-            {"text": "Save Photos & Videos to Gallery"},
-          ],
-          "plans": [
-            {
-              "title": "Annual",
-              "subtitle": "3-day free trial",
-              "price": "\$19.99",
-              "originalPrice": "\$32.00",
-              "badgeText": "Best - \$0.38 / week",
-            },
-            {
-              "title": "Monthly",
-              "subtitle": "3-day free trial",
-              "price": "\$9.99",
-            },
-          ],
-        }),
-      });
-
-      await remoteConfig.fetchAndActivate();
-      final String jsonString = remoteConfig.getString('sales_screen_config');
-
+    if (mounted) {
       setState(() {
-        _config = SalesConfig.fromJson(jsonDecode(jsonString));
+        _config = RemoteConfigService().salesConfig;
         _isLoading = false;
       });
-    } catch (e) {
-      debugPrint('Error fetching remote config: $e');
-      // Fallback if needed, or just stop loading to show defaults/error state
-      setState(() => _isLoading = false);
     }
   }
 
@@ -164,7 +119,11 @@ class _SalesScreenState extends State<SalesScreen> {
                               const SizedBox(height: 16),
                               if (_config != null)
                                 ..._config!.features.map(
-                                  (f) => _FeatureRow(text: f['text']),
+                                  (f) => _FeatureRow(
+                                    text: f['text'],
+                                    textSize: _config!.featureSize,
+                                    textColor: _config!.featureColor,
+                                  ),
                                 ),
                               const SizedBox(height: 30),
 
@@ -187,6 +146,8 @@ class _SalesScreenState extends State<SalesScreen> {
                                         price: plan['price'],
                                         originalPrice: plan['originalPrice'],
                                         badgeText: plan['badgeText'],
+                                        titleSize: _config!.planSize,
+                                        titleColor: _config!.planColor,
                                         onTap: () => setState(
                                           () => _selectedPlanIndex = index,
                                         ),
@@ -324,7 +285,14 @@ class _SalesScreenState extends State<SalesScreen> {
 
 class _FeatureRow extends StatelessWidget {
   final String text;
-  const _FeatureRow({required this.text});
+  final double textSize;
+  final Color textColor;
+
+  const _FeatureRow({
+    required this.text,
+    required this.textSize,
+    required this.textColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -338,9 +306,9 @@ class _FeatureRow extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
+              style: TextStyle(
+                color: textColor,
+                fontSize: textSize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -359,6 +327,8 @@ class _PlanCard extends StatelessWidget {
   final String price;
   final String? originalPrice;
   final String? badgeText;
+  final double titleSize;
+  final Color titleColor;
   final VoidCallback onTap;
 
   const _PlanCard({
@@ -369,6 +339,8 @@ class _PlanCard extends StatelessWidget {
     required this.price,
     this.originalPrice,
     this.badgeText,
+    required this.titleSize,
+    required this.titleColor,
     required this.onTap,
   });
 
@@ -422,9 +394,9 @@ class _PlanCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: titleSize,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -550,46 +522,5 @@ class _FooterLinks extends StatelessWidget {
       " | ",
       style: TextStyle(color: Colors.white38, fontSize: 12),
     );
-  }
-}
-
-class SalesConfig {
-  final String titleText;
-  final double titleSize;
-  final Color titleColor;
-  final String subTitleText;
-  final double subTitleSize;
-  final Color subTitleColor;
-  final List<Map<String, dynamic>> features;
-  final List<Map<String, dynamic>> plans;
-
-  SalesConfig({
-    required this.titleText,
-    required this.titleSize,
-    required this.titleColor,
-    required this.subTitleText,
-    required this.subTitleSize,
-    required this.subTitleColor,
-    required this.features,
-    required this.plans,
-  });
-
-  factory SalesConfig.fromJson(Map<String, dynamic> json) {
-    return SalesConfig(
-      titleText: json['title']['text'],
-      titleSize: json['title']['textSize'].toDouble(),
-      titleColor: _parseColor(json['title']['textColor']),
-      subTitleText: json['subTitle']['text'],
-      subTitleSize: json['subTitle']['textSize'].toDouble(),
-      subTitleColor: _parseColor(json['subTitle']['textColor']),
-      features: List<Map<String, dynamic>>.from(json['features']),
-      plans: List<Map<String, dynamic>>.from(json['plans']),
-    );
-  }
-
-  static Color _parseColor(String hex) {
-    hex = hex.replaceAll('#', '');
-    if (hex.length == 6) hex = 'FF$hex'; // Add opacity if missing
-    return Color(int.parse(hex, radix: 16));
   }
 }

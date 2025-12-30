@@ -6,10 +6,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:insta_save/screens/rating_screen.dart';
 import 'package:insta_save/screens/home_screen.dart'; // Renamed for consistency (was home_screen.dart)
 import 'package:insta_save/screens/intro_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await RemoteConfigService().initialize();
 
   // 1. Lock Orientation to Portrait (Optional but recommended for this type of app)
   await SystemChrome.setPreferredOrientations([

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:insta_save/screens/home_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 
 class ReviewsScreen extends StatefulWidget {
   const ReviewsScreen({super.key});
@@ -21,6 +22,14 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   void initState() {
     super.initState();
     _startCountdown();
+    _loadConfig();
+  }
+
+  Future<void> _loadConfig() async {
+    if (RemoteConfigService().ratingConfig == null) {
+      await RemoteConfigService().initialize();
+    }
+    if (mounted) setState(() {});
   }
 
   void _startCountdown() {
@@ -70,13 +79,16 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
       child: Image.asset(
         'assets/images/rating_bg.png',
         fit: BoxFit.cover,
-        errorBuilder: (_,__,___) => Container(color: Colors.white), // Fallback
+        errorBuilder: (_, __, ___) =>
+            Container(color: Colors.white), // Fallback
       ),
     );
   }
 
   // --- WIDGET: Main Content (Images & Text) ---
   Widget _buildMainContent() {
+    final config = RemoteConfigService().ratingConfig;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -86,7 +98,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           child: Image.asset(
             'assets/images/reviews_top_section.png',
             fit: BoxFit.contain,
-            errorBuilder: (_,__,___) => const SizedBox(height: 50),
+            errorBuilder: (_, __, ___) => const SizedBox(height: 50),
           ),
         ),
 
@@ -106,22 +118,22 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Loved by Thousands',
+              Text(
+                config?.title ?? 'Loved by Thousands',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 28,
+                  color: config?.titleColor ?? Colors.black,
+                  fontSize: config?.titleSize ?? 28,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Trusted by creators and users worldwide.',
+              Text(
+                config?.subtitle ?? 'Trusted by creators and users worldwide.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
+                  color: config?.subTitleColor ?? Colors.grey,
+                  fontSize: config?.subTitleSize ?? 16,
                 ),
               ),
             ],
@@ -134,7 +146,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           child: Image.asset(
             'assets/images/reviews_bottom_section.png',
             fit: BoxFit.contain,
-            errorBuilder: (_,__,___) => const SizedBox(height: 50),
+            errorBuilder: (_, __, ___) => const SizedBox(height: 50),
           ),
         ),
       ],
@@ -208,7 +220,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
       // Use pushAndRemoveUntil to ensure user can't go back to this screen
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const HomeScreen()),
-            (route) => false,
+        (route) => false,
       );
     }
   }

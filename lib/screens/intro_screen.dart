@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:insta_save/screens/rating_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
@@ -13,6 +14,19 @@ class IntroScreen extends StatefulWidget {
 
 class _IntroScreenState extends State<IntroScreen> {
   final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConfig();
+  }
+
+  Future<void> _loadConfig() async {
+    if (RemoteConfigService().introConfig == null) {
+      await RemoteConfigService().initialize();
+    }
+    if (mounted) setState(() {});
+  }
 
   // Optimization: Use ValueNotifier to update ONLY the text title, not the whole screen
   final ValueNotifier<int> _currentPageNotifier = ValueNotifier<int>(0);
@@ -79,7 +93,10 @@ class _IntroScreenState extends State<IntroScreen> {
                 Expanded(
                   flex: 2,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24.0,
+                      vertical: 20.0,
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -87,12 +104,20 @@ class _IntroScreenState extends State<IntroScreen> {
                         ValueListenableBuilder<int>(
                           valueListenable: _currentPageNotifier,
                           builder: (context, pageIndex, child) {
+                            // Fetch from config if available, else fallback to hardcoded defaults
+                            final config = RemoteConfigService().introConfig;
+                            String title = _items[pageIndex].title;
+                            if (config != null &&
+                                pageIndex < config.items.length) {
+                              title = config.items[pageIndex].title;
+                            }
+
                             return Text(
-                              _items[pageIndex].title,
+                              title,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 24,
+                              style: TextStyle(
+                                color: config?.titleColor ?? Colors.black,
+                                fontSize: config?.titleSize ?? 24,
                                 fontWeight: FontWeight.bold,
                                 height: 1.2,
                               ),
@@ -204,8 +229,10 @@ class _IntroCard extends StatelessWidget {
           // borderRadius: BorderRadius.circular(20),
           child: Image.asset(
             imagePath,
-            fit: BoxFit.contain, // Changed to contain to respect aspect ratio inside page view
-            width: MediaQuery.of(context).size.width * 0.85, // 85% of screen width
+            fit: BoxFit
+                .contain, // Changed to contain to respect aspect ratio inside page view
+            width:
+                MediaQuery.of(context).size.width * 0.85, // 85% of screen width
           ),
         ),
       ),
