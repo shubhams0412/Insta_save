@@ -49,8 +49,9 @@ class _HomeScreenState extends State<HomeScreen>
   List<Map<String, dynamic>>? _separatedMedia;
   bool _isLoadingMedia = true;
 
-  // Optimized: Define URL once if they are the same, or keep separate for future proofing
-  static const String _apiBaseUrl = "http://13.200.64.163:9081/";
+  static const String _apiBaseUrl = kReleaseMode
+      ? "http://13.200.64.163:9081/" // TODO: Replace with actual release URL
+      : "http://13.200.64.163:9081/";
 
   StreamSubscription? _downloadSubscription;
 
@@ -177,9 +178,15 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _refreshGalleryDataSilently() async {
     // 1. Fetch raw data from Prefs
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload(); // 🔥 Force sync with disk
-    final savedData = prefs.getStringList('savedPosts') ?? [];
+// 1. Initialize with an allowList (more performant and ProGuard friendly)
+    final SharedPreferencesWithCache prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'savedPosts'}, // List all keys you intend to use
+      ),
+    );
+
+// 2. Fetch data directly from the cache (Synchronous after initialization)
+    final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
 
     final List<SavedPost> loadedPosts = savedData.map((json) {
       return SavedPost.fromJson(Map<String, dynamic>.from(jsonDecode(json)));

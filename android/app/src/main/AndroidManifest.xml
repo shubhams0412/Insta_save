@@ -6,8 +6,10 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- ✅ For Android 13+ (API 33+), this one is better -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- ✅ Required for Firebase & API calls in Release Mode -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
             android:label="insta_save"
@@ -50,6 +52,13 @@
                     android:name="android.appwidget.provider"
                     android:resource="@xml/widget_info" />
         </receiver>
+
+        <!-- Firebase Auto-Initialization Provider (Required for Release builds) -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            android:exported="false"
+            android:initOrder="100" />
 
         <meta-data
                 android:name="flutterEmbedding"

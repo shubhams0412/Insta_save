@@ -10,8 +10,9 @@ import 'package:insta_save/services/remote_config_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
   await Firebase.initializeApp();
-  await RemoteConfigService().initialize();
 
   // 1. Lock Orientation to Portrait (Optional but recommended for this type of app)
   await SystemChrome.setPreferredOrientations([
@@ -28,12 +29,32 @@ Future<void> main() async {
     ),
   );
 
-  // 3. Load Preferences
-  final prefs = await SharedPreferences.getInstance();
-  final bool isIntroSeen = prefs.getBool('isIntroSeen') ?? false;
-  // Note: Blocking user with Rating screen on startup can be aggressive.
-  // Consider moving rating logic inside Home Screen triggered by an event.
-  final bool isRatingSeen = prefs.getBool('isRatingSeen') ?? false;
+  // Default values in case SharedPreferences fails
+  bool isIntroSeen = false;
+  bool isRatingSeen = false;
+
+  try {
+    // Initialize Remote Config with a timeout (e.g., 5 seconds)
+    // This ensures that even if Remote Config fails, the app still opens
+    await RemoteConfigService().initialize();
+    //     .timeout(
+    //   const Duration(seconds: 5),
+    //   onTimeout: () => print("Remote Config timeout"),
+    // );
+
+    // 3. Load Preferences (inside try-catch to handle platform channel errors)
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isIntroSeen', 'isRatingSeen'},
+      ),
+    );
+    isIntroSeen = prefs.getBool('isIntroSeen') ?? false;
+    // Note: Blocking user with Rating screen on startup can be aggressive.
+    // Consider moving rating logic inside Home Screen triggered by an event.
+    isRatingSeen = prefs.getBool('isRatingSeen') ?? false;
+  } catch (e) {
+    print("Initialization error: $e");
+  }
 
   runApp(MyApp(isIntroSeen: isIntroSeen, isRatingSeen: isRatingSeen));
 }

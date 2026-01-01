@@ -1,5 +1,6 @@
 package com.example.insta_save
 
+import io.flutter.plugins.GeneratedPluginRegistrant;
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
@@ -20,6 +21,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        
+        // Explicitly register all plugins (helps with R8 optimization issues)
+        GeneratedPluginRegistrant.registerWith(flutterEngine)
 
         // Handle Widget Actions Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL).setMethodCallHandler { call, result ->
