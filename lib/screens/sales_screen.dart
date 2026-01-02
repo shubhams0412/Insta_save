@@ -351,91 +351,115 @@ class _PlanCard extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Gradient border container
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF1E1E1E) : Colors.black54,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFFE84DFF)
-                    : Colors.grey.shade800,
-                width: 2,
-              ),
+              gradient: isSelected
+                  ? const LinearGradient(
+                      colors: [
+                        Color(0xFFFFCF1F),
+                        Color(0xFFF76B17),
+                        Color(0xFFFC01CA),
+                        Color(0xFF7E0BFD),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [
+                        Color(0xFF424242), // Grey color for unselected
+                        Color(0xFF424242),
+                      ],
+                    ),
             ),
-            child: Row(
-              children: [
-                // Radio Circle
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? const Color(0xFFE84DFF)
-                        : Colors.transparent,
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFFE84DFF)
-                          : Colors.grey.shade600,
-                      width: 2,
+            padding: const EdgeInsets.all(2), // Consistent padding
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E), // Fixed dark background
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  // Radio Circle
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: isSelected
+                          ? const LinearGradient(
+                              colors: [
+                                Color(0xFFFFCF1F),
+                                Color(0xFFF76B17),
+                                Color(0xFFFC01CA),
+                                Color(0xFF7E0BFD),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      border: !isSelected
+                          ? Border.all(color: Colors.grey.shade600, width: 2)
+                          : null,
                     ),
+                    child: isSelected
+                        ? const Icon(Icons.check, color: Colors.white, size: 16)
+                        : null,
                   ),
-                  child: isSelected
-                      ? const Icon(Icons.check, color: Colors.white, size: 16)
-                      : null,
-                ),
-                const SizedBox(width: 16),
+                  const SizedBox(width: 16),
 
-                // Text Info
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: titleColor,
-                        fontSize: titleSize,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-
-                // Price Info
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      price,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (originalPrice != null)
+                  // Text Info
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        originalPrice!,
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 13,
-                          decoration: TextDecoration.lineThrough,
+                        title,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: titleSize,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                  ],
-                ),
-              ],
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+
+                  // Price Info
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        price,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (originalPrice != null)
+                        Text(
+                          originalPrice!,
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 13,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
 

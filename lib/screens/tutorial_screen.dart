@@ -4,7 +4,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 // --- Function to call to show the tutorial dialog ---
 Future<void> showTutorialDialog(BuildContext context) async {
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await SharedPreferencesWithCache.create(
+    cacheOptions: const SharedPreferencesWithCacheOptions(
+      allowList: <String>{'dontShowTutorialAgain'},
+    ),
+  );
   final bool dontShowAgain = prefs.getBool('dontShowTutorialAgain') ?? false;
 
   if (dontShowAgain) {
@@ -30,7 +34,10 @@ Future<void> _openInstagram() async {
   if (await canLaunchUrl(Uri.parse(instaAppUrl))) {
     await launchUrl(Uri.parse(instaAppUrl));
   } else {
-    await launchUrl(Uri.parse(instaWebUrl), mode: LaunchMode.externalApplication);
+    await launchUrl(
+      Uri.parse(instaWebUrl),
+      mode: LaunchMode.externalApplication,
+    );
   }
 }
 
@@ -65,7 +72,8 @@ class _TutorialDialogState extends State<TutorialDialog> {
       'image': 'assets/images/tutorial_03.png',
       'step': '03',
       'title': 'Paste Link',
-      'desc': 'Return to Instant Saver. It auto-detects the link, just tap "Allow paste".',
+      'desc':
+          'Return to Instant Saver. It auto-detects the link, just tap "Allow paste".',
     },
     {
       'image': 'assets/images/tutorial_04.png',
@@ -207,7 +215,9 @@ class _TutorialDialogState extends State<TutorialDialog> {
             value: _dontShowAgain,
             onChanged: (val) => setState(() => _dontShowAgain = val ?? false),
             activeColor: Colors.black,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -222,7 +232,11 @@ class _TutorialDialogState extends State<TutorialDialog> {
         ElevatedButton(
           onPressed: () async {
             if (_dontShowAgain) {
-              final prefs = await SharedPreferences.getInstance();
+              final prefs = await SharedPreferencesWithCache.create(
+                cacheOptions: const SharedPreferencesWithCacheOptions(
+                  allowList: <String>{'dontShowTutorialAgain'},
+                ),
+              );
               await prefs.setBool('dontShowTutorialAgain', true);
             }
             if (mounted) {
@@ -239,7 +253,10 @@ class _TutorialDialogState extends State<TutorialDialog> {
             ),
             elevation: 0,
           ),
-          child: const Text("Got it", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          child: const Text(
+            "Got it",
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );
@@ -276,7 +293,7 @@ class _TutorialPage extends StatelessWidget {
             child: Image.asset(
               imagePath,
               fit: BoxFit.contain,
-              errorBuilder: (_,__,___) => const Icon(
+              errorBuilder: (_, __, ___) => const Icon(
                 Icons.broken_image_outlined,
                 color: Colors.grey,
                 size: 50,
@@ -287,10 +304,7 @@ class _TutorialPage extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           "$step. $title",
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
         Text(

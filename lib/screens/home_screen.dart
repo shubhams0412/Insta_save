@@ -48,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   List<Map<String, dynamic>>? _separatedMedia;
   bool _isLoadingMedia = true;
+  bool _isLoggedIn = false;
 
   static const String _apiBaseUrl = kReleaseMode
       ? "http://13.200.64.163:9081/" // TODO: Replace with actual release URL
@@ -95,6 +96,22 @@ class _HomeScreenState extends State<HomeScreen>
 
     // Check for Widget Actions
     _initWidgetListener();
+
+    // Check Instagram login status
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isInstagramLoggedIn'},
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
+      });
+    }
   }
 
   void _initWidgetListener() {
@@ -178,14 +195,17 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _refreshGalleryDataSilently() async {
     // 1. Fetch raw data from Prefs
-// 1. Initialize with an allowList (more performant and ProGuard friendly)
-    final SharedPreferencesWithCache prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'savedPosts'}, // List all keys you intend to use
-      ),
-    );
+    // 1. Initialize with an allowList (more performant and ProGuard friendly)
+    final SharedPreferencesWithCache prefs =
+        await SharedPreferencesWithCache.create(
+          cacheOptions: const SharedPreferencesWithCacheOptions(
+            allowList: <String>{
+              'savedPosts',
+            }, // List all keys you intend to use
+          ),
+        );
 
-// 2. Fetch data directly from the cache (Synchronous after initialization)
+    // 2. Fetch data directly from the cache (Synchronous after initialization)
     final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
 
     final List<SavedPost> loadedPosts = savedData.map((json) {
@@ -344,66 +364,150 @@ class _HomeScreenState extends State<HomeScreen>
 
   // --- WIDGET: Link Input ---
   Widget _buildLinkInput() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(14),
-            ),
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          // Text Field
+          Expanded(
             child: TextField(
               controller: _linkController,
               autofocus: false,
+              style: const TextStyle(fontSize: 15),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 hintText: "Paste a link here",
-                hintStyle: TextStyle(color: Colors.grey),
+                hintStyle: TextStyle(color: Colors.grey, fontSize: 15),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16),
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
 
-        // Optimization: Only rebuild this button when text changes, not the whole screen
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _linkController,
-          builder: (context, value, child) {
-            final hasText = value.text.isNotEmpty;
-            return GestureDetector(
-              onTap: hasText
-                  ? () => navigateToPreviewScreen(context, _linkController)
-                  : pasteInstagramLink,
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: hasText ? Colors.blue.shade200 : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Row(
-                    children: [
-                      Icon(
-                        hasText ? Icons.arrow_forward : Icons.link,
-                        size: 18,
-                        color: Colors.black87,
+          // Button (changes based on state)
+          Padding(
+            padding: const EdgeInsets.all(6),
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _linkController,
+              builder: (context, value, child) {
+                final hasText = value.text.isNotEmpty;
+
+                // Show Login button when has text and not logged in
+                if (hasText && !_isLoggedIn) {
+                  return GestureDetector(
+                    onTap: () =>
+                        navigateToPreviewScreen(context, _linkController),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        hasText ? "Go" : "Paste link",
-                        style: const TextStyle(color: Colors.black87),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFFFFCF1F),
+                            Color(0xFFF76B17),
+                            Color(0xFFFC01CA),
+                            Color(0xFF7E0BFD),
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
                       ),
-                    ],
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.login, size: 16, color: Colors.white),
+                          SizedBox(width: 6),
+                          Text(
+                            "Login",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Show Go button when has text and logged in
+                if (hasText) {
+                  return GestureDetector(
+                    onTap: () =>
+                        navigateToPreviewScreen(context, _linkController),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade400,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            "Go",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Default: Paste link button
+                return GestureDetector(
+                  onTap: pasteInstagramLink,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.link, size: 16, color: Colors.grey.shade700),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Paste link",
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -841,7 +945,11 @@ class _HomeScreenState extends State<HomeScreen>
       ).showSnackBar(const SnackBar(content: Text("❌ No Internet Connection")));
       return;
     }
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isInstagramLoggedIn'},
+      ),
+    );
     bool isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
 
     if (!isLoggedIn) {
@@ -858,20 +966,27 @@ class _HomeScreenState extends State<HomeScreen>
         }
         return;
       }
+      // Refresh login status after successful login
+      _checkLoginStatus();
       // If success == true, proceed to download!
     }
     double fakeProgress = 0.0;
     Timer? progressTimer;
+    bool dialogMounted = true;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             progressTimer ??= Timer.periodic(
               const Duration(milliseconds: 100),
               (timer) {
+                if (!dialogMounted) {
+                  timer.cancel();
+                  return;
+                }
                 if (fakeProgress < 0.95) {
                   setDialogState(() => fakeProgress += 0.01);
                 } else {
@@ -886,7 +1001,10 @@ class _HomeScreenState extends State<HomeScreen>
           },
         );
       },
-    );
+    ).then((_) {
+      dialogMounted = false;
+      progressTimer?.cancel();
+    });
 
     try {
       final String apiUrl = "${_apiBaseUrl}download_media";

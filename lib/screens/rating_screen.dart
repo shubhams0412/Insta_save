@@ -160,48 +160,56 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: Container(
-            width: double.infinity,
-            height: 56, // Fixed height for consistency
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFE9800), Color(0xFFE700A8)],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFE700A8).withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: navigateToHomeScreen,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              // Optimization: Only rebuild the Text widget when timer changes
-              child: ValueListenableBuilder<int>(
-                valueListenable: _countdownNotifier,
-                builder: (context, value, child) {
-                  return Text(
-                    value > 0 ? 'Continue ($value)' : 'Continue',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+          // Listen to countdown to enable/disable button
+          child: ValueListenableBuilder<int>(
+            valueListenable: _countdownNotifier,
+            builder: (context, countdownValue, child) {
+              final bool isEnabled = countdownValue == 0;
+              return AnimatedOpacity(
+                opacity: isEnabled ? 1.0 : 0.6,
+                duration: const Duration(milliseconds: 200),
+                child: Container(
+                  width: double.infinity,
+                  height: 56, // Fixed height for consistency
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFE9800), Color(0xFFE700A8)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
                     ),
-                  );
-                },
-              ),
-            ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFE700A8).withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: isEnabled ? navigateToHomeScreen : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      disabledBackgroundColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      countdownValue > 0
+                          ? 'Continue ($countdownValue)'
+                          : 'Continue',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -211,7 +219,11 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   // --- ACTIONS ---
 
   Future<void> navigateToHomeScreen() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isRatingSeen'},
+      ),
+    );
 
     // Save flag
     await prefs.setBool('isRatingSeen', true);

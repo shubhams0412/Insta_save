@@ -69,7 +69,7 @@ class _IntroScreenState extends State<IntroScreen> {
               children: [
                 // --- SWIPEABLE CARDS ---
                 Expanded(
-                  flex: 3,
+                  flex: 5,
                   child: Padding(
                     padding: const EdgeInsets.only(top: 20.0),
                     child: PageView.builder(
@@ -89,9 +89,14 @@ class _IntroScreenState extends State<IntroScreen> {
                   ),
                 ),
 
+                // Responsive spacing between image and bottom section
+                SizedBox(
+                  height: MediaQuery.of(context).size.height < 700 ? 16 : 24,
+                ),
+
                 // --- BOTTOM SECTION ---
                 Expanded(
-                  flex: 2,
+                  flex: 3,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24.0,
@@ -190,7 +195,11 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> navigateToReviewsScreen() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isIntroSeen'},
+      ),
+    );
     // Save preference
     await prefs.setBool('isIntroSeen', true);
 
@@ -221,20 +230,13 @@ class _IntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Transform.rotate(
-        angle: rotationAngle,
-        child: ClipRRect(
-          // Optional: Add border radius if your images need rounded corners
-          // borderRadius: BorderRadius.circular(20),
-          child: Image.asset(
-            imagePath,
-            fit: BoxFit
-                .contain, // Changed to contain to respect aspect ratio inside page view
-            width:
-                MediaQuery.of(context).size.width * 0.85, // 85% of screen width
-          ),
-        ),
+    return Transform.rotate(
+      angle: rotationAngle,
+      child: Image.asset(
+        imagePath,
+        fit: BoxFit.fitWidth,
+        width: double.infinity,
+        alignment: Alignment.topCenter,
       ),
     );
   }

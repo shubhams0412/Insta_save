@@ -104,7 +104,11 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     setState(() => _isDeleting = true);
 
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferencesWithCache.create(
+        cacheOptions: const SharedPreferencesWithCacheOptions(
+          allowList: <String>{'savedPosts'},
+        ),
+      );
       final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
 
       // 1. Filter and Delete in one pass
@@ -235,7 +239,7 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
                 ? _showDeleteConfirmation
                 : null,
           ),
-        ] else ...[
+        ] else if (_currentList.isNotEmpty) ...[
           TextButton(
             onPressed: _toggleSelectionMode,
             child: const Text(

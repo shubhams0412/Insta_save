@@ -35,7 +35,8 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
   String _errorTitle = "Connection Error";
 
   // Constants
-  static const String _instagramAuthUrl = "https://www.instagram.com/accounts/login/";
+  static const String _instagramAuthUrl =
+      "https://www.instagram.com/accounts/login/";
 
   @override
   void initState() {
@@ -47,7 +48,9 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
     // Basic WebViewController setup
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36") // Helps avoid some login blocks
+      ..setUserAgent(
+        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36",
+      ) // Helps avoid some login blocks
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -79,11 +82,11 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
             if (error.errorType == WebResourceErrorType.connect ||
                 error.errorType == WebResourceErrorType.hostLookup ||
                 error.errorType == WebResourceErrorType.timeout) {
-
               if (mounted) {
                 setState(() {
                   _errorTitle = "Connection Error";
-                  _errorMessage = "Unable to load Instagram. Please check your internet connection.";
+                  _errorMessage =
+                      "Unable to load Instagram. Please check your internet connection.";
                   _showErrorOverlay = true;
                   _isLoading = false;
                 });
@@ -95,7 +98,10 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
             // Basic check if we are navigating within Instagram
             if (url.contains("instagram.com/")) {
               // Delay check slightly to allow cookies to set
-              Future.delayed(const Duration(seconds: 1), () => _checkLoginSuccess(request.url));
+              Future.delayed(
+                const Duration(seconds: 1),
+                () => _checkLoginSuccess(request.url),
+              );
             }
             return NavigationDecision.navigate;
           },
@@ -116,13 +122,15 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
     if (url.contains("instagram.com/") &&
         !url.contains("/accounts/login") &&
         !url.contains("/accounts/signup")) {
-
       // Check Cookies via JavaScript execution since WebViewCookieManager.getCookies is not available
       try {
-        final Object result = await _controller.runJavaScriptReturningResult('document.cookie');
+        final Object result = await _controller.runJavaScriptReturningResult(
+          'document.cookie',
+        );
         final String cookieString = result.toString();
 
-        if (cookieString.contains('sessionid') || cookieString.contains('csrftoken')) {
+        if (cookieString.contains('sessionid') ||
+            cookieString.contains('csrftoken')) {
           _handleLoginSuccess();
         }
       } catch (e) {
@@ -136,9 +144,16 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
     _hasHandledSuccess = true;
 
     // 1. Save to SharedPreferences (Equivalent to UserDefaults)
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isInstagramLoggedIn', 'instagramLoginDate'},
+      ),
+    );
     await prefs.setBool('isInstagramLoggedIn', true);
-    await prefs.setString('instagramLoginDate', DateTime.now().toIso8601String());
+    await prefs.setString(
+      'instagramLoginDate',
+      DateTime.now().toIso8601String(),
+    );
 
     // 2. Show Success Overlay
     if (mounted) {
@@ -178,7 +193,9 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFEEEEEE)),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -208,23 +225,21 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                   LinearProgressIndicator(
                     value: _progress,
                     backgroundColor: Colors.white,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF2558)), // Matches Swift Hex
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Color(0xFFFF2558),
+                    ), // Matches Swift Hex
                     minHeight: 2,
                   ),
 
                 // --- WEBVIEW ---
-                Expanded(
-                  child: WebViewWidget(controller: _controller),
-                ),
+                Expanded(child: WebViewWidget(controller: _controller)),
               ],
             ),
 
             // --- LOADING INDICATOR (Center) ---
             if (_isLoading)
               const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFFF2558),
-                ),
+                child: CircularProgressIndicator(color: Color(0xFFFF2558)),
               ),
 
             // --- SUCCESS OVERLAY ---
@@ -274,7 +289,10 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFCD2BF6), Color(0xFF14BEFC)], // Matches Swift Hex
+                        colors: [
+                          Color(0xFFCD2BF6),
+                          Color(0xFF14BEFC),
+                        ], // Matches Swift Hex
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -283,7 +301,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                           color: const Color(0xFFCD2BF6).withOpacity(0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
-                        )
+                        ),
                       ],
                     ),
                     child: const Icon(
@@ -358,7 +376,10 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFFF4B4F), Color(0xFFFF6B9D)], // Matches Swift Hex
+                        colors: [
+                          Color(0xFFFF4B4F),
+                          Color(0xFFFF6B9D),
+                        ], // Matches Swift Hex
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
@@ -367,7 +388,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                           color: const Color(0xFFFF4B4F).withOpacity(0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
-                        )
+                        ),
                       ],
                     ),
                     child: const Icon(

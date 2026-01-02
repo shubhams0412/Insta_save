@@ -163,9 +163,11 @@ class DownloadManager extends ChangeNotifier {
     }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      // Reload to ensure we have the absolute latest data from disk
-      await prefs.reload();
+      final prefs = await SharedPreferencesWithCache.create(
+        cacheOptions: const SharedPreferencesWithCacheOptions(
+          allowList: <String>{'savedPosts'},
+        ),
+      );
       final List<String> existingData = prefs.getStringList('savedPosts') ?? [];
 
       final newPost = SavedPost(

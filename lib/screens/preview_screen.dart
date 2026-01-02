@@ -148,19 +148,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
               builder: (context, child) {
                 final isBatchDownloading = DownloadManager.instance
                     .isBatchDownloading(widget.postUrl);
+                final batchProgress = DownloadManager.instance.getBatchProgress(
+                  widget.postUrl,
+                );
+
+                // Consider download complete if progress is 100% OR no active tasks
+                final isDownloadComplete =
+                    !isBatchDownloading || batchProgress >= 1.0;
 
                 return Stack(
                   children: [
                     Column(
                       children: [
                         // Carousel
-                        Expanded(child: _buildCarousel(isBatchDownloading)),
+                        Expanded(child: _buildCarousel(!isDownloadComplete)),
 
                         // Indicators
                         _buildPageIndicators(),
 
                         // Next Button
-                        _buildNextButton(isBatchDownloading),
+                        _buildNextButton(!isDownloadComplete),
                       ],
                     ),
                   ],

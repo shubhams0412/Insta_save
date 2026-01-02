@@ -40,7 +40,8 @@ class RepostScreen extends StatefulWidget {
   State<RepostScreen> createState() => _RepostScreenState();
 }
 
-class _RepostScreenState extends State<RepostScreen> {
+class _RepostScreenState extends State<RepostScreen>
+    with WidgetsBindingObserver {
   late final TextEditingController _captionController;
 
   static const MethodChannel _mediaStoreChannel = MethodChannel('media_store');
@@ -69,6 +70,7 @@ class _RepostScreenState extends State<RepostScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _captionController = TextEditingController(text: widget.initialCaption);
     _captionController.addListener(() {
       if (mounted) setState(() {});
@@ -79,9 +81,26 @@ class _RepostScreenState extends State<RepostScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _captionController.dispose();
     _videoController?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (_videoController == null || !_videoController!.value.isInitialized) {
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _videoController!.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      _videoController!.play();
+    }
   }
 
   // --- LOGIC: Media Initialization ---
@@ -441,8 +460,11 @@ class _RepostScreenState extends State<RepostScreen> {
     }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
+      final prefs = await SharedPreferencesWithCache.create(
+        cacheOptions: const SharedPreferencesWithCacheOptions(
+          allowList: <String>{'savedPosts'},
+        ),
+      );
       final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
       savedData.removeWhere((item) {
         final Map<String, dynamic> decoded = jsonDecode(item);
@@ -709,7 +731,7 @@ class _RepostScreenState extends State<RepostScreen> {
         ),
         onPressed: _isReposting ? null : _handleRepostAction,
         child: _isReposting
-            ? const Text("Processing...")
+            ? const Text("Preparing...")
             : const Text(
                 "Repost to Instagram",
                 style: TextStyle(color: Colors.white),

@@ -74,7 +74,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
                   initialCaption: devicePost.caption,
                   postUrl: devicePost.postUrl,
                   localImagePath: devicePost.localPath,
-                  showDeleteButton: true,
+                  showDeleteButton: false,
                   showHomeButton: true,
                   thumbnailUrl: devicePost.localPath,
                 ),
@@ -95,7 +95,11 @@ class _EditPostScreenState extends State<EditPostScreen> {
   }
 
   Future<void> _savePostToLocal(SavedPost post) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'savedPosts'},
+      ),
+    );
     final existing = prefs.getStringList('savedPosts') ?? [];
 
     // Remove duplicates based on path
