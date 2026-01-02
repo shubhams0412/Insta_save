@@ -129,3 +129,23 @@
 -keepattributes Signature, *Annotation*, EnclosingMethod, InnerClasses, SourceFile, LineNumberTable
 -ignorewarnings
 -renamesourcefileattribute SourceFile
+
+# ==============================================================================
+# 5. FFMPEG KIT
+# ==============================================================================
+# Fix "NoClassDefFoundError: com.antonkarpenko.ffmpegkit.FFmpegKitConfig"
+-keep class com.antonkarpenko.ffmpegkit.** { *; }
+-keep class com.arthenica.ffmpegkit.** { *; }
+
+# Protect JNI callbacks
+-keep class * extends com.arthenica.ffmpegkit.AbstractSession { *; }
+-keep class * extends com.arthenica.ffmpegkit.AbstractLog { *; }
+-keep class * extends com.arthenica.ffmpegkit.AbstractStatistics { *; }
+
+# Keep native library loading code
+-keep class com.arthenica.ffmpegkit.AbiDetect { *; }
+-keep class com.arthenica.ffmpegkit.FFmpegKitConfig { *; }
+
+# Prevent warning spam
+-dontwarn com.antonkarpenko.ffmpegkit.**
+-dontwarn com.arthenica.ffmpegkit.**

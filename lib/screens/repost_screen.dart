@@ -555,9 +555,10 @@ class _RepostScreenState extends State<RepostScreen>
         children: [
           if (_isVideo &&
               _videoController != null &&
-              _videoController!.value.isInitialized)
-            VideoPlayer(_videoController!)
-          else
+              _videoController!.value.isInitialized) ...[
+            VideoPlayer(_videoController!),
+            _PlayPauseOverlay(controller: _videoController!),
+          ] else
             Builder(
               builder: (context) {
                 // Determine the correct path to show
@@ -736,6 +737,52 @@ class _RepostScreenState extends State<RepostScreen>
                 "Repost to Instagram",
                 style: TextStyle(color: Colors.white),
               ),
+      ),
+    );
+  }
+}
+
+class _PlayPauseOverlay extends StatefulWidget {
+  final VideoPlayerController controller;
+  const _PlayPauseOverlay({required this.controller});
+
+  @override
+  State<_PlayPauseOverlay> createState() => _PlayPauseOverlayState();
+}
+
+class _PlayPauseOverlayState extends State<_PlayPauseOverlay> {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (widget.controller.value.isPlaying) {
+            widget.controller.pause();
+          } else {
+            widget.controller.play();
+          }
+        });
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: Center(
+          child: AnimatedOpacity(
+            opacity: widget.controller.value.isPlaying ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 300),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(16),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 48,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
