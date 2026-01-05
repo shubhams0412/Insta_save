@@ -53,6 +53,32 @@
                     android:resource="@xml/widget_info" />
         </receiver>
 
+        <receiver
+                android:name=".HomeWidgetProvider1"
+                android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.LAUNCH" />
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <meta-data
+                    android:name="android.appwidget.provider"
+                    android:resource="@xml/widget_info_1" />
+        </receiver>
+
+        <receiver
+                android:name=".HomeWidgetProvider4"
+                android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.LAUNCH" />
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <meta-data
+                    android:name="android.appwidget.provider"
+                    android:resource="@xml/widget_info_4" />
+        </receiver>
+
         <!-- Firebase Auto-Initialization Provider (Required for Release builds) -->
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
@@ -63,6 +89,11 @@
         <meta-data
                 android:name="flutterEmbedding"
                 android:value="2" />
+
+        <!-- AdMob App ID (Test) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713"/>
 
         <provider
                 android:name="vn.hunghd.flutterdownloader.DownloadedFileProvider"

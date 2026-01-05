@@ -21,6 +21,11 @@ class SalesConfig {
   final Color planColor;
   final List<Map<String, dynamic>> features;
   final List<Map<String, dynamic>> plans;
+  final String privacyText;
+  final String termsText;
+  final String closeText;
+  final double footerTextSize;
+  final Color footerTextColor;
 
   SalesConfig({
     required this.titleText,
@@ -35,6 +40,11 @@ class SalesConfig {
     required this.planColor,
     required this.features,
     required this.plans,
+    required this.privacyText,
+    required this.termsText,
+    required this.closeText,
+    required this.footerTextSize,
+    required this.footerTextColor,
   });
 
   factory SalesConfig.fromJson(Map<String, dynamic> json) {
@@ -55,6 +65,20 @@ class SalesConfig {
       planColor: RemoteConfigModels.parseColor(json['plansStyle']['textColor']),
       features: List<Map<String, dynamic>>.from(json['features']),
       plans: List<Map<String, dynamic>>.from(json['plans']),
+      privacyText: json['privacyText'] ?? 'Privacy Policy',
+      termsText: json['termsText'] ?? 'Terms of Use',
+      closeText: json['closeText'] ?? 'Close',
+      footerTextSize:
+          (json['footerStyle'] != null &&
+              json['footerStyle']['textSize'] != null)
+          ? (json['footerStyle']['textSize'] as num).toDouble()
+          : 12.0,
+      footerTextColor: RemoteConfigModels.parseColor(
+        (json['footerStyle'] != null &&
+                json['footerStyle']['textColor'] != null)
+            ? json['footerStyle']['textColor']
+            : '#60FFFFFF',
+      ),
     );
   }
 }

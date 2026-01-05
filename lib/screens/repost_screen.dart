@@ -13,6 +13,8 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:insta_save/services/ad_service.dart'; // Import this
+import 'package:insta_save/services/rating_service.dart';
 
 class RepostScreen extends StatefulWidget {
   final String imageUrl;
@@ -66,6 +68,7 @@ class _RepostScreenState extends State<RepostScreen>
   double _imageAspectRatio = 1.0;
   bool _isLoadingImage = true;
   bool _isReposting = false;
+  bool _didOpenInstagram = false; // Flag to track if we launched Instagram
 
   @override
   void initState() {
@@ -100,6 +103,13 @@ class _RepostScreenState extends State<RepostScreen>
       _videoController!.pause();
     } else if (state == AppLifecycleState.resumed) {
       _videoController!.play();
+
+      // 6. On coming back from report (from Instagram app)
+      if (_didOpenInstagram) {
+        debugPrint("Returned from Instagram - Checking Rating Trigger");
+        RatingService().checkAndShowRating(null, always: true);
+        _didOpenInstagram = false; // Reset
+      }
     }
   }
 
@@ -350,48 +360,56 @@ class _RepostScreenState extends State<RepostScreen>
   // --- LOGIC: Handle Repost (Share Video Only) ---
 
   Future<void> _handleRepostAction() async {
-    if (_isReposting) return;
-    setState(() => _isReposting = true);
+    // 5. On tapping "share" "repost" and "save" icon of share screen (everytime)
+    await RatingService().checkAndShowRating(null, always: true);
+    // Set flag so we valid trigger 6 on return
+    _didOpenInstagram = true;
 
-    try {
-      String pathToSend = widget.localImagePath;
+    // "Show an ad when reposting images at the 2nd, 4th, 6th, etc." (Even occurrences)
+    AdService().handleRepostAd(() async {
+      if (_isReposting) return;
+      setState(() => _isReposting = true);
 
-      if (_isTagVisible) {
-        if (_isVideo) {
-          final renderedFile = await renderVideoWithCustomStyle();
-          pathToSend = renderedFile.path;
-        } else {
-          final renderedFile = await renderImageWithTag();
-          pathToSend = renderedFile.path;
+      try {
+        String pathToSend = widget.localImagePath;
+
+        if (_isTagVisible) {
+          if (_isVideo) {
+            final renderedFile = await renderVideoWithCustomStyle();
+            pathToSend = renderedFile.path;
+          } else {
+            final renderedFile = await renderImageWithTag();
+            pathToSend = renderedFile.path;
+          }
         }
+
+        // Determine media type
+        final String mediaType = _isVideo ? 'video' : 'image';
+
+        // Save to MediaStore
+        final String? uriString = await _mediaStoreChannel.invokeMethod<String>(
+          'saveMedia',
+          {'path': pathToSend, 'mediaType': mediaType},
+        );
+
+        if (uriString != null) {
+          await _instaChannel.invokeMethod('repostToInstagram', {
+            'uri': uriString,
+            'mediaType': mediaType,
+          });
+        }
+      } on PlatformException catch (e) {
+        debugPrint("Native Error: ${e.message}");
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Platform Error: ${e.message}")));
+      } catch (e) {
+        debugPrint("General Error: $e");
+      } finally {
+        if (mounted)
+          setState(() => _isReposting = false); // ✅ Always stops spinner
       }
-
-      // Determine media type
-      final String mediaType = _isVideo ? 'video' : 'image';
-
-      // Save to MediaStore
-      final String? uriString = await _mediaStoreChannel.invokeMethod<String>(
-        'saveMedia',
-        {'path': pathToSend, 'mediaType': mediaType},
-      );
-
-      if (uriString != null) {
-        await _instaChannel.invokeMethod('repostToInstagram', {
-          'uri': uriString,
-          'mediaType': mediaType,
-        });
-      }
-    } on PlatformException catch (e) {
-      debugPrint("Native Error: ${e.message}");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Platform Error: ${e.message}")));
-    } catch (e) {
-      debugPrint("General Error: $e");
-    } finally {
-      if (mounted)
-        setState(() => _isReposting = false); // ✅ Always stops spinner
-    }
+    }); // End Ad Block
   }
 
   // --- LOGIC: UI Helpers ---
@@ -519,7 +537,10 @@ class _RepostScreenState extends State<RepostScreen>
           if (widget.showHomeButton)
             IconButton(
               icon: const Icon(Icons.home_outlined, color: Colors.black),
-              onPressed: () {
+              onPressed: () async {
+                // 4. On tapping "home" icon of share screen (everytime)
+                await RatingService().checkAndShowRating(null, always: true);
+
                 int targetTab = _isVideo ? 1 : 0;
                 if (widget.postUrl == "device_media") {
                   targetTab = 2;
@@ -624,7 +645,7 @@ class _RepostScreenState extends State<RepostScreen>
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          widget.username,
+                          "@${widget.username.replaceAll('@', '').trim()}",
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: _tagTextColor.withOpacity(_tagTextOpacity),

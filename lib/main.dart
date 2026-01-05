@@ -7,6 +7,9 @@ import 'package:insta_save/screens/rating_screen.dart';
 import 'package:insta_save/screens/home_screen.dart'; // Renamed for consistency (was home_screen.dart)
 import 'package:insta_save/screens/intro_screen.dart';
 import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/ad_service.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,24 +36,19 @@ Future<void> main() async {
   bool isIntroSeen = false;
   bool isRatingSeen = false;
 
+  // Initialize Remote Config and Ads
   try {
-    // Initialize Remote Config with a timeout (e.g., 5 seconds)
-    // This ensures that even if Remote Config fails, the app still opens
     await RemoteConfigService().initialize();
-    //     .timeout(
-    //   const Duration(seconds: 5),
-    //   onTimeout: () => print("Remote Config timeout"),
-    // );
+    await AdService().initialize();
+    // Load the first ad immediately so it's ready
+    await AdService().loadAppOpenAd();
 
-    // 3. Load Preferences (inside try-catch to handle platform channel errors)
     final prefs = await SharedPreferencesWithCache.create(
       cacheOptions: const SharedPreferencesWithCacheOptions(
         allowList: <String>{'isIntroSeen', 'isRatingSeen'},
       ),
     );
     isIntroSeen = prefs.getBool('isIntroSeen') ?? false;
-    // Note: Blocking user with Rating screen on startup can be aggressive.
-    // Consider moving rating logic inside Home Screen triggered by an event.
     isRatingSeen = prefs.getBool('isRatingSeen') ?? false;
   } catch (e) {
     print("Initialization error: $e");
@@ -59,7 +57,7 @@ Future<void> main() async {
   runApp(MyApp(isIntroSeen: isIntroSeen, isRatingSeen: isRatingSeen));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final bool isIntroSeen;
   final bool isRatingSeen;
 
@@ -70,8 +68,54 @@ class MyApp extends StatelessWidget {
   });
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Try showing ad on cold start (after layout)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint("App Open Ad Flow: Initial PostFrameCallback check.");
+      if (navigatorKey.currentContext != null) {
+        AdService().showAppOpenAdWithLoader(navigatorKey.currentContext!);
+      } else {
+        debugPrint(
+          "App Open Ad Flow: navigatorKey.currentContext is NULL on init",
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint("App Open Ad Flow: Lifecycle State Changed: $state");
+    if (state == AppLifecycleState.resumed) {
+      if (navigatorKey.currentContext != null) {
+        debugPrint(
+          "App Open Ad Flow: Calling showAppOpenAdWithLoader from Lifecycle",
+        );
+        AdService().showAppOpenAdWithLoader(navigatorKey.currentContext!);
+      } else {
+        debugPrint(
+          "App Open Ad Flow: navigatorKey.currentContext is NULL on Resume",
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'InstaSave',
       debugShowCheckedModeBanner: false,
 
@@ -97,13 +141,11 @@ class MyApp extends StatelessWidget {
 
   // Helper to determine the starting screen
   Widget _getStartScreen() {
-    if (!isIntroSeen) {
+    if (!widget.isIntroSeen) {
       return const IntroScreen();
     }
 
-    if (!isRatingSeen) {
-      // ⚠️ UX Warning: This forces users to see the Rating screen
-      // every time they open the app until they rate it.
+    if (!widget.isRatingSeen) {
       return const ReviewsScreen();
     }
 

@@ -13,10 +13,18 @@ class RemoteConfigService {
   SalesConfig? _salesConfig;
   IntroConfig? _introConfig;
   RatingConfig? _ratingConfig;
+  bool _isInstaLoginFlowEnabled = true;
+  String _privacyUrl = 'https://turbofast.io/privacy/';
+  String _termsUrl = 'https://turbofast.io/terms/';
+  String _contactUsUrl = 'https://turbofast.io/contact/';
 
   SalesConfig? get salesConfig => _salesConfig;
   IntroConfig? get introConfig => _introConfig;
   RatingConfig? get ratingConfig => _ratingConfig;
+  bool get isInstaLoginFlowEnabled => _isInstaLoginFlowEnabled;
+  String get privacyUrl => _privacyUrl;
+  String get termsUrl => _termsUrl;
+  String get contactUsUrl => _contactUsUrl;
 
   Future<void> initialize() async {
     try {
@@ -72,6 +80,22 @@ class RemoteConfigService {
         debugPrint('Error parsing RatingConfig: $e');
       }
     }
+
+    // Parse Insta Login Flow Flag
+    _isInstaLoginFlowEnabled = _remoteConfig.getBool(
+      'is_insta_login_flow_enabled',
+    );
+
+    // Parse Global URLs
+    _privacyUrl = _remoteConfig.getString('privacyUrl').isNotEmpty
+        ? _remoteConfig.getString('privacyUrl')
+        : 'https://turbofast.io/privacy/';
+    _termsUrl = _remoteConfig.getString('termsUrl').isNotEmpty
+        ? _remoteConfig.getString('termsUrl')
+        : 'https://turbofast.io/terms/';
+    _contactUsUrl = _remoteConfig.getString('contactUsUrl').isNotEmpty
+        ? _remoteConfig.getString('contactUsUrl')
+        : 'https://turbofast.io/contact/';
   }
 
   Map<String, dynamic> _getDefaults() {
@@ -110,6 +134,10 @@ class RemoteConfigService {
             "price": "\$9.99",
           },
         ],
+        "privacyText": "Privacy Policy",
+        "termsText": "Terms of Use",
+        "closeText": "Close",
+        "footerStyle": {"textSize": 12.0, "textColor": "#60FFFFFF"},
       }),
       "intro_screen_config": jsonEncode({
         "items": [
@@ -127,6 +155,10 @@ class RemoteConfigService {
         "subTitleSize": 16.0,
         "subTitleColor": "#808080",
       }),
+      "is_insta_login_flow_enabled": true,
+      "privacyUrl": "https://turbofast.io/privacy/",
+      "termsUrl": "https://turbofast.io/terms/",
+      "contactUsUrl": "https://turbofast.io/contact/",
     };
   }
 }

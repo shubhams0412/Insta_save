@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:insta_save/screens/rating_screen.dart';
 import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/rating_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
@@ -195,6 +196,9 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> navigateToReviewsScreen() async {
+    // 1. Show Rating "everytime" as per requirement
+    await RatingService().checkAndShowRating(null, always: true);
+
     final prefs = await SharedPreferencesWithCache.create(
       cacheOptions: const SharedPreferencesWithCacheOptions(
         allowList: <String>{'isIntroSeen'},

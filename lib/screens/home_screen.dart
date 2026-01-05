@@ -12,6 +12,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // Import this
+import 'package:insta_save/services/ad_service.dart'; // Import this
+import 'package:insta_save/services/rating_service.dart';
 
 import 'package:insta_save/screens/all_media_screen.dart';
 import 'package:insta_save/screens/edit_post_screen.dart';
@@ -22,6 +25,7 @@ import 'package:insta_save/screens/tutorial_screen.dart';
 import 'package:insta_save/services/download_manager.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 
 import '../services/instagram_login_webview.dart';
 import '../widgets/status_dialog.dart';
@@ -51,10 +55,11 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isLoggedIn = false;
 
   static const String _apiBaseUrl = kReleaseMode
-      ? "http://13.200.64.163:9081/" // TODO: Replace with actual release URL
+      ? "https://api.instasave.turbofast.io/" // TODO: Replace with actual release URL
       : "http://13.200.64.163:9081/";
 
   StreamSubscription? _downloadSubscription;
+  BannerAd? _bannerAd; // Add Banner Ad state
 
   static const platform = MethodChannel(
     'com.example.insta_save/widget_actions',
@@ -76,6 +81,12 @@ class _HomeScreenState extends State<HomeScreen>
     // Register Lifecycle Observer
     WidgetsBinding.instance.addObserver(this);
 
+    // Check local clipboard for text
+    _checkClipboardAndPaste();
+
+    // Load Banner Ad
+    _bannerAd = AdService().createBannerAd();
+
     // Initial check for clipboard
     _checkClipboardAndPaste();
 
@@ -91,6 +102,11 @@ class _HomeScreenState extends State<HomeScreen>
     _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((
       _,
     ) async {
+      debugPrint("Download Completed - Checking Rating Trigger");
+      // 3. On success import of each media save "every 1st, 3rd, 5th, and so on"
+      await RatingService().checkAndShowRating(
+        RatingService().mediaSaveCountKey,
+      );
       _refreshGalleryDataSilently();
     });
 
@@ -235,6 +251,7 @@ class _HomeScreenState extends State<HomeScreen>
     _downloadSubscription?.cancel();
     _linkController.dispose();
     _tabController.dispose();
+    _bannerAd?.dispose(); // Dispose Banner Ad
     super.dispose();
   }
 
@@ -269,6 +286,14 @@ class _HomeScreenState extends State<HomeScreen>
           Expanded(child: _buildMediaTabsSection()),
         ],
       ),
+      bottomNavigationBar: _bannerAd == null
+          ? null
+          : Container(
+              color: Colors.white,
+              width: _bannerAd!.size.width.toDouble(),
+              height: _bannerAd!.size.height.toDouble(),
+              child: AdWidget(ad: _bannerAd!),
+            ),
     );
   }
 
@@ -888,26 +913,29 @@ class _HomeScreenState extends State<HomeScreen>
   // --- ACTIONS ---
 
   Future<void> pickImageFromGallery() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    // Wrap with Ad Logic: "Select Pics & Repost" (Odd occurrences)
+    AdService().handleSelectPicsAd(() async {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
-    if (image != null && mounted) {
-      FocusManager.instance.primaryFocus?.unfocus();
-      Navigator.push(
-        context,
-        createSlideRoute(
-          EditPostScreen(imagePath: image.path),
-          direction: SlideFrom.bottom,
-        ),
-      ).then((result) {
-        if (result is Map && result['home'] == true) {
-          if (mounted && result.containsKey('tab')) {
-            _tabController.animateTo(result['tab'] as int);
+      if (image != null && mounted) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        Navigator.push(
+          context,
+          createSlideRoute(
+            EditPostScreen(imagePath: image.path),
+            direction: SlideFrom.bottom,
+          ),
+        ).then((result) {
+          if (result is Map && result['home'] == true) {
+            if (mounted && result.containsKey('tab')) {
+              _tabController.animateTo(result['tab'] as int);
+            }
           }
-        }
-        _refreshGalleryDataSilently();
-      });
-    }
+          _refreshGalleryDataSilently();
+        });
+      }
+    });
   }
 
   void pasteInstagramLink() async {
@@ -929,6 +957,15 @@ class _HomeScreenState extends State<HomeScreen>
     BuildContext context,
     TextEditingController linkController,
   ) async {
+    // "Show an ad each time when the user clicks Paste Link and proceeds with Go"
+    AdService().handlePasteLinkAd(() {
+      _processLinkNavigation(linkController);
+    });
+  }
+
+  Future<void> _processLinkNavigation(
+    TextEditingController linkController,
+  ) async {
     String link = linkController.text.trim();
 
     if (!link.contains("instagram.com/")) {
@@ -945,31 +982,41 @@ class _HomeScreenState extends State<HomeScreen>
       ).showSnackBar(const SnackBar(content: Text("❌ No Internet Connection")));
       return;
     }
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isInstagramLoggedIn'},
-      ),
-    );
-    bool isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
 
-    if (!isLoggedIn) {
-      // User is not logged in, open the Login Webview
-      bool success = await openInstaLogin(context);
-      if (!success) {
-        // User cancelled login or failed, so we stop here.
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("⚠️ Login required to download content"),
-            ),
-          );
+    // Check Firebase Remote Config flag for login flow
+    final remoteConfig = RemoteConfigService();
+    final bool isLoginFlowEnabled = remoteConfig.isInstaLoginFlowEnabled;
+
+    if (isLoginFlowEnabled) {
+      // Original behavior: Check login status and show login if needed
+      final prefs = await SharedPreferencesWithCache.create(
+        cacheOptions: const SharedPreferencesWithCacheOptions(
+          allowList: <String>{'isInstagramLoggedIn'},
+        ),
+      );
+      bool isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
+
+      if (!isLoggedIn) {
+        // User is not logged in, open the Login Webview
+        bool success = await openInstaLogin(context);
+        if (!success) {
+          // User cancelled login or failed, so we stop here.
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("⚠️ Login required to download content"),
+              ),
+            );
+          }
+          return;
         }
-        return;
+        // Refresh login status after successful login
+        _checkLoginStatus();
+        // If success == true, proceed to download!
       }
-      // Refresh login status after successful login
-      _checkLoginStatus();
-      // If success == true, proceed to download!
     }
+    // If login flow is disabled, skip login check and proceed directly to API call
+
     double fakeProgress = 0.0;
     Timer? progressTimer;
     bool dialogMounted = true;

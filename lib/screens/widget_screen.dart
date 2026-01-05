@@ -9,14 +9,13 @@ class WidgetsScreen extends StatefulWidget {
 }
 
 class _WidgetsScreenState extends State<WidgetsScreen> {
-  // ✅ 1. Use viewportFraction to control image size naturally
-  final PageController _pageController = PageController(viewportFraction: 0.55);
+  // ✅ 1. Use standard PageView without fractional viewport for simple swipe
+  final PageController _pageController = PageController();
   bool _isExpanded = false;
 
   final List<String> _widgetImages = [
     "assets/images/widget_1.png",
     "assets/images/widget_2.png",
-    "assets/images/widget_3.png",
     "assets/images/widget_4.png",
   ];
 
@@ -42,7 +41,11 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            size: 20,
+            color: Colors.black,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -72,9 +75,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
             const SizedBox(height: 20),
 
             // Carousel Section
-            Expanded(
-              child: _buildCarousel(),
-            ),
+            Expanded(child: _buildCarousel()),
 
             const SizedBox(height: 20),
 
@@ -93,47 +94,26 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Images
-        SizedBox(
-          height: 300, // Fixed height for carousel area
+        Expanded(
           child: PageView.builder(
             controller: _pageController,
             itemCount: _widgetImages.length,
-            // PadEnds false ensures the first item starts in center if wanted,
-            // but with viewportFraction it centers automatically.
+            physics: const BouncingScrollPhysics(),
             itemBuilder: (context, index) {
-              // Add simple scale animation (Optional polish)
-              return AnimatedBuilder(
-                animation: _pageController,
-                builder: (context, child) {
-                  return Center(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.asset(
-                          _widgetImages[index],
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: double.infinity,
-                            height: double.infinity,
-                            color: Colors.grey.shade200,
-                            child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
-                          ),
-                        ),
-                      ),
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                child: Image.asset(
+                  _widgetImages[index],
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: double.infinity,
+                    height: double.infinity,
+                    color: Colors.grey.shade200,
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey),
                     ),
-                  );
-                },
+                  ),
+                ),
               );
             },
           ),

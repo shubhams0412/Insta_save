@@ -233,15 +233,22 @@ class _SalesScreenState extends State<SalesScreen> {
 
                             // Footer Links
                             _FooterLinks(
+                              privacyText:
+                                  _config?.privacyText ?? 'Privacy Policy',
+                              termsText: _config?.termsText ?? 'Terms of Use',
+                              closeText: _config?.closeText ?? 'Close',
+                              textSize: _config?.footerTextSize ?? 12.0,
+                              textColor:
+                                  _config?.footerTextColor ?? Colors.white38,
                               onPrivacyTap: () => _openWebView(
                                 context,
-                                'Privacy Policy',
-                                'https://google.com',
+                                _config?.privacyText ?? 'Privacy Policy',
+                                RemoteConfigService().privacyUrl,
                               ),
                               onTermsTap: () => _openWebView(
                                 context,
-                                'Terms of Use',
-                                'https://google.com',
+                                _config?.termsText ?? 'Terms of Use',
+                                RemoteConfigService().termsUrl,
                               ),
                               onCloseTap: () => Navigator.of(context).pop(),
                             ),
@@ -504,11 +511,21 @@ class _PlanCard extends StatelessWidget {
 }
 
 class _FooterLinks extends StatelessWidget {
+  final String privacyText;
+  final String termsText;
+  final String closeText;
+  final double textSize;
+  final Color textColor;
   final VoidCallback onPrivacyTap;
   final VoidCallback onTermsTap;
   final VoidCallback onCloseTap;
 
   const _FooterLinks({
+    required this.privacyText,
+    required this.termsText,
+    required this.closeText,
+    required this.textSize,
+    required this.textColor,
     required this.onPrivacyTap,
     required this.onTermsTap,
     required this.onCloseTap,
@@ -519,11 +536,11 @@ class _FooterLinks extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildLink("Privacy Policy", onPrivacyTap),
+        _buildLink(privacyText, onPrivacyTap),
         _buildDivider(),
-        _buildLink("Terms of Use", onTermsTap),
+        _buildLink(termsText, onTermsTap),
         _buildDivider(),
-        _buildLink("Close", onCloseTap),
+        _buildLink(closeText, onCloseTap),
       ],
     );
   }
@@ -535,16 +552,16 @@ class _FooterLinks extends StatelessWidget {
         padding: const EdgeInsets.all(4.0), // Hit area padding
         child: Text(
           text,
-          style: const TextStyle(color: Colors.white38, fontSize: 12),
+          style: TextStyle(color: textColor, fontSize: textSize),
         ),
       ),
     );
   }
 
   Widget _buildDivider() {
-    return const Text(
+    return Text(
       " | ",
-      style: TextStyle(color: Colors.white38, fontSize: 12),
+      style: TextStyle(color: textColor, fontSize: textSize),
     );
   }
 }
