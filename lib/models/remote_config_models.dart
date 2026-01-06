@@ -151,3 +151,23 @@ class RatingConfig {
     );
   }
 }
+
+class AdsConfig {
+  final bool banner;
+  final bool interstitial;
+  final bool appOpen;
+
+  AdsConfig({
+    required this.banner,
+    required this.interstitial,
+    required this.appOpen,
+  });
+
+  factory AdsConfig.fromJson(Map<String, dynamic> json) {
+    return AdsConfig(
+      banner: json['banner'] ?? true,
+      interstitial: json['interstitial'] ?? true,
+      appOpen: json['appOpen'] ?? true,
+    );
+  }
+}

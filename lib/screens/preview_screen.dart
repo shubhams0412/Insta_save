@@ -75,32 +75,40 @@ class _PreviewScreenState extends State<PreviewScreen> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) {
-            return AnimatedBuilder(
-              animation: DownloadManager.instance,
-              builder: (context, _) {
-                final double progress = DownloadManager.instance
-                    .getBatchProgress(widget.postUrl);
-                if (progress >= 1.0 && _isDialogOpen) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
-                    }
-                  });
-                }
-                return StatusDialog(
-                  type: DialogType.processing,
-                  progress: progress,
-                  onButtonClick: () {
-                    // "Got it, notify me" -> Go to Home
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
-                );
-              },
+          builder: (context) {
+            return PopScope(
+              canPop: false,
+              child: AnimatedBuilder(
+                animation: DownloadManager.instance,
+                builder: (context, child) {
+                  final progress = DownloadManager.instance.getBatchProgress(
+                    widget.postUrl,
+                  );
+
+                  final currentItem = widget.mediaItems[_currentPage];
+                  final bool isVideo =
+                      currentItem['url']?.contains('.mp4') ?? false;
+                  final int targetTab = isVideo ? 1 : 0;
+
+                  return StatusDialog(
+                    type: DialogType.processing,
+                    progress: progress,
+                    onButtonClick: () {
+                      // "Got it, notify me" -> Go to Home with specific tab
+                      Navigator.of(
+                        context,
+                      ).pop({'home': true, 'tab': targetTab});
+                    },
+                  );
+                },
+              ),
             );
           },
-        ).then((_) {
+        ).then((result) {
           _isDialogOpen = false;
+          if (result is Map && result['home'] == true && mounted) {
+            Navigator.of(context).pop(result);
+          }
         });
       }
     });
@@ -129,51 +137,67 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(
-          widget.username,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
+    // Determine target tab based on the current page's media type
+    final currentItem = widget.mediaItems[_currentPage];
+    final bool isVideo = currentItem['url']?.contains('.mp4') ?? false;
+    final int targetTab = isVideo ? 1 : 0;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.of(context).pop({'home': true, 'tab': targetTab});
+      },
+      child: Scaffold(
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () =>
+                Navigator.of(context).pop({'home': true, 'tab': targetTab}),
+          ),
+          title: Text(
+            widget.username,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+        ),
+        body: _tempPath == null
+            ? const SizedBox() // Wait for temp path
+            : AnimatedBuilder(
+                animation: DownloadManager.instance,
+                builder: (context, child) {
+                  final isBatchDownloading = DownloadManager.instance
+                      .isBatchDownloading(widget.postUrl);
+                  final batchProgress = DownloadManager.instance
+                      .getBatchProgress(widget.postUrl);
+
+                  // Consider download complete if progress is 100% OR no active tasks
+                  final isDownloadComplete =
+                      !isBatchDownloading || batchProgress >= 1.0;
+
+                  return Stack(
+                    children: [
+                      Column(
+                        children: [
+                          // Carousel
+                          Expanded(child: _buildCarousel(!isDownloadComplete)),
+
+                          // Indicators
+                          _buildPageIndicators(),
+
+                          // Next Button
+                          _buildNextButton(!isDownloadComplete),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
       ),
-      body: _tempPath == null
-          ? const SizedBox() // Wait for temp path
-          : AnimatedBuilder(
-              animation: DownloadManager.instance,
-              builder: (context, child) {
-                final isBatchDownloading = DownloadManager.instance
-                    .isBatchDownloading(widget.postUrl);
-                final batchProgress = DownloadManager.instance.getBatchProgress(
-                  widget.postUrl,
-                );
-
-                // Consider download complete if progress is 100% OR no active tasks
-                final isDownloadComplete =
-                    !isBatchDownloading || batchProgress >= 1.0;
-
-                return Stack(
-                  children: [
-                    Column(
-                      children: [
-                        // Carousel
-                        Expanded(child: _buildCarousel(!isDownloadComplete)),
-
-                        // Indicators
-                        _buildPageIndicators(),
-
-                        // Next Button
-                        _buildNextButton(!isDownloadComplete),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
     );
   }
 

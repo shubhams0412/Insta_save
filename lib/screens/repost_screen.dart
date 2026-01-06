@@ -503,25 +503,37 @@ class _RepostScreenState extends State<RepostScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildMediaPreview(),
-            _buildToolbar(),
-            _buildCaptionSection(),
-            const SizedBox(height: 20),
-          ],
+    int targetTab = _isVideo ? 1 : 0;
+    if (widget.postUrl == "device_media") {
+      targetTab = 2;
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.of(context).pop({'home': true, 'tab': targetTab});
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: _buildAppBar(targetTab),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildMediaPreview(),
+              _buildToolbar(),
+              _buildCaptionSection(),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
+        bottomNavigationBar: _buildRepostButton(),
       ),
-      bottomNavigationBar: _buildRepostButton(),
     );
   }
 
-  AppBar _buildAppBar() {
+  AppBar _buildAppBar(int targetTab) {
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -532,7 +544,8 @@ class _RepostScreenState extends State<RepostScreen>
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () =>
+                Navigator.of(context).pop({'home': true, 'tab': targetTab}),
           ),
           if (widget.showHomeButton)
             IconButton(
@@ -541,10 +554,6 @@ class _RepostScreenState extends State<RepostScreen>
                 // 4. On tapping "home" icon of share screen (everytime)
                 await RatingService().checkAndShowRating(null, always: true);
 
-                int targetTab = _isVideo ? 1 : 0;
-                if (widget.postUrl == "device_media") {
-                  targetTab = 2;
-                }
                 Navigator.of(context).pop({'home': true, 'tab': targetTab});
               },
             ),

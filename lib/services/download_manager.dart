@@ -97,6 +97,7 @@ class DownloadManager extends ChangeNotifier {
           bytes.addAll(newBytes);
           receivedBytes += newBytes.length;
           task.progress.value = receivedBytes / contentLength;
+          notifyListeners(); // 🔥 Notify UI for progress bar updates
         },
         onDone: () async {
           await file.writeAsBytes(bytes);

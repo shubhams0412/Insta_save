@@ -4,6 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:insta_save/main.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 
 class AdService {
   static final AdService _instance = AdService._internal();
@@ -36,7 +37,6 @@ class AdService {
   // Counters
   static const String _appOpenCountKey = 'ad_app_open_count';
   static const String _selectPicsCountKey = 'ad_select_pics_count';
-  static const String _repostCountKey = 'ad_repost_count';
 
   Future<void> initialize() async {
     await MobileAds.instance.initialize();
@@ -76,6 +76,13 @@ class AdService {
 
   Future<void> showAppOpenAdWithLoader(BuildContext context) async {
     if (_isShowingAppOpenAd) return;
+
+    // Check Remote Config
+    final adsConfig = RemoteConfigService().adsConfig;
+    if (adsConfig != null && !adsConfig.appOpen) {
+      debugPrint("App Open Ad Flow: Disabled via Remote Config.");
+      return;
+    }
 
     // Check if paused for share sheet
     if (_isPausedForShare) {
@@ -202,6 +209,14 @@ class AdService {
   // --- INTERSTITIAL ADS ---
 
   void showInterstitialAd({required Function onAdDismissed}) {
+    // Check Remote Config
+    final adsConfig = RemoteConfigService().adsConfig;
+    if (adsConfig != null && !adsConfig.interstitial) {
+      debugPrint("Interstitial Ad Flow: Disabled via Remote Config.");
+      onAdDismissed();
+      return;
+    }
+
     InterstitialAd.load(
       adUnitId: Platform.isAndroid
           ? _interstitialAdUnitIdAndroid
@@ -247,28 +262,25 @@ class AdService {
   }
 
   Future<void> handleRepostAd(Function onProceed) async {
-    final prefs = await SharedPreferences.getInstance();
-    int count = (prefs.getInt(_repostCountKey) ?? 0) + 1;
-    await prefs.setInt(_repostCountKey, count);
-
-    debugPrint("Repost Count: $count");
-
-    // "Show an ad when reposting images at the 2nd, 4th, 6th, etc." (Even numbers)
-    if (count % 2 == 0) {
-      showInterstitialAd(onAdDismissed: onProceed);
-    } else {
-      onProceed();
-    }
+    // Ad removed from Repost action as per new strategy
+    onProceed();
   }
 
   void handlePasteLinkAd(Function onProceed) {
-    // "Show an ad each time when the user clicks Paste Link and proceeds with Go"
-    showInterstitialAd(onAdDismissed: onProceed);
+    // Ad removed from Paste Link action as per new strategy
+    onProceed();
   }
 
   // --- BANNER ADS ---
 
-  BannerAd createBannerAd() {
+  BannerAd? createBannerAd() {
+    // Check Remote Config
+    final adsConfig = RemoteConfigService().adsConfig;
+    if (adsConfig != null && !adsConfig.banner) {
+      debugPrint("Banner Ad Flow: Disabled via Remote Config.");
+      return null;
+    }
+
     return BannerAd(
       adUnitId: Platform.isAndroid
           ? _bannerAdUnitIdAndroid

@@ -13,6 +13,7 @@ class RemoteConfigService {
   SalesConfig? _salesConfig;
   IntroConfig? _introConfig;
   RatingConfig? _ratingConfig;
+  AdsConfig? _adsConfig;
   bool _isInstaLoginFlowEnabled = true;
   String _privacyUrl = 'https://turbofast.io/privacy/';
   String _termsUrl = 'https://turbofast.io/terms/';
@@ -21,6 +22,7 @@ class RemoteConfigService {
   SalesConfig? get salesConfig => _salesConfig;
   IntroConfig? get introConfig => _introConfig;
   RatingConfig? get ratingConfig => _ratingConfig;
+  AdsConfig? get adsConfig => _adsConfig;
   bool get isInstaLoginFlowEnabled => _isInstaLoginFlowEnabled;
   String get privacyUrl => _privacyUrl;
   String get termsUrl => _termsUrl;
@@ -31,7 +33,9 @@ class RemoteConfigService {
       await _remoteConfig.setConfigSettings(
         RemoteConfigSettings(
           fetchTimeout: const Duration(minutes: 1),
-          minimumFetchInterval: const Duration(hours: 12),
+          minimumFetchInterval: const Duration(
+            minutes: 1,
+          ), // Reduced for testing
         ),
       );
 
@@ -96,6 +100,16 @@ class RemoteConfigService {
     _contactUsUrl = _remoteConfig.getString('contactUsUrl').isNotEmpty
         ? _remoteConfig.getString('contactUsUrl')
         : 'https://turbofast.io/contact/';
+
+    // Parse Ads Config
+    String adsJson = _remoteConfig.getString('ads_config');
+    if (adsJson.isNotEmpty) {
+      try {
+        _adsConfig = AdsConfig.fromJson(jsonDecode(adsJson));
+      } catch (e) {
+        debugPrint('Error parsing AdsConfig: $e');
+      }
+    }
   }
 
   Map<String, dynamic> _getDefaults() {
@@ -159,6 +173,11 @@ class RemoteConfigService {
       "privacyUrl": "https://turbofast.io/privacy/",
       "termsUrl": "https://turbofast.io/terms/",
       "contactUsUrl": "https://turbofast.io/contact/",
+      "ads_config": jsonEncode({
+        "banner": true,
+        "interstitial": true,
+        "appOpen": true,
+      }),
     };
   }
 }

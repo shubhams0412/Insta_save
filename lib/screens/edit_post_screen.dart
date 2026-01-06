@@ -127,34 +127,41 @@ class _EditPostScreenState extends State<EditPostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      // Ensures the keyboard pushes the layout up, but we control how
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    _buildImagePreview(),
-                    const SizedBox(height: 30),
-                    _buildForm(),
-                    // Add extra padding at bottom so keyboard doesn't hide last field
-                    SizedBox(
-                      height: MediaQuery.of(context).viewInsets.bottom > 0
-                          ? 20
-                          : 0,
-                    ),
-                  ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.of(context).pop({'home': true, 'tab': 2});
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        // Ensures the keyboard pushes the layout up, but we control how
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      _buildImagePreview(),
+                      const SizedBox(height: 30),
+                      _buildForm(),
+                      // Add extra padding at bottom so keyboard doesn't hide last field
+                      SizedBox(
+                        height: MediaQuery.of(context).viewInsets.bottom > 0
+                            ? 20
+                            : 0,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            _buildBottomButton(),
-          ],
+              _buildBottomButton(),
+            ],
+          ),
         ),
       ),
     );
@@ -174,7 +181,8 @@ class _EditPostScreenState extends State<EditPostScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 28, color: Colors.grey),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () =>
+                Navigator.of(context).pop({'home': true, 'tab': 2}),
           ),
         ],
       ),

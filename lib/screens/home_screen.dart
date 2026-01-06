@@ -12,7 +12,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // Import this
 import 'package:insta_save/services/ad_service.dart'; // Import this
 import 'package:insta_save/services/rating_service.dart';
 
@@ -59,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen>
       : "http://13.200.64.163:9081/";
 
   StreamSubscription? _downloadSubscription;
-  BannerAd? _bannerAd; // Add Banner Ad state
 
   static const platform = MethodChannel(
     'com.example.insta_save/widget_actions',
@@ -83,9 +81,6 @@ class _HomeScreenState extends State<HomeScreen>
 
     // Check local clipboard for text
     _checkClipboardAndPaste();
-
-    // Load Banner Ad
-    _bannerAd = AdService().createBannerAd();
 
     // Initial check for clipboard
     _checkClipboardAndPaste();
@@ -251,7 +246,6 @@ class _HomeScreenState extends State<HomeScreen>
     _downloadSubscription?.cancel();
     _linkController.dispose();
     _tabController.dispose();
-    _bannerAd?.dispose(); // Dispose Banner Ad
     super.dispose();
   }
 
@@ -286,14 +280,7 @@ class _HomeScreenState extends State<HomeScreen>
           Expanded(child: _buildMediaTabsSection()),
         ],
       ),
-      bottomNavigationBar: _bannerAd == null
-          ? null
-          : Container(
-              color: Colors.white,
-              width: _bannerAd!.size.width.toDouble(),
-              height: _bannerAd!.size.height.toDouble(),
-              child: AdWidget(ad: _bannerAd!),
-            ),
+      bottomNavigationBar: null,
     );
   }
 
@@ -420,8 +407,10 @@ class _HomeScreenState extends State<HomeScreen>
               builder: (context, value, child) {
                 final hasText = value.text.isNotEmpty;
 
-                // Show Login button when has text and not logged in
-                if (hasText && !_isLoggedIn) {
+                // Show Login button when has text and not logged in AND login flow is enabled
+                if (hasText &&
+                    !_isLoggedIn &&
+                    RemoteConfigService().isInstaLoginFlowEnabled) {
                   return GestureDetector(
                     onTap: () =>
                         navigateToPreviewScreen(context, _linkController),
@@ -826,7 +815,12 @@ class _HomeScreenState extends State<HomeScreen>
                 direction: SlideFrom.bottom,
               ),
             )
-            .then((deleted) {
+            .then((result) {
+              if (result is Map && result['home'] == true) {
+                if (mounted && result.containsKey('tab')) {
+                  _tabController.animateTo(result['tab'] as int);
+                }
+              }
               // Reload silently regardless of deletion for consistency
               _refreshGalleryDataSilently();
             });
