@@ -38,8 +38,8 @@ class SettingsScreen extends StatelessWidget {
           leading: IconButton(
             icon: const Icon(
               Icons.arrow_back_ios_new,
-              size: 20,
-              color: Colors.black,
+              size: 22,
+              color: Colors.grey,
             ),
             onPressed: () {
               // Manual pop also triggers the listener (if implemented correctly)
@@ -52,7 +52,7 @@ class SettingsScreen extends StatelessWidget {
             style: TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.bold,
-              fontSize: 18,
+              fontSize: 22,
             ),
           ),
         ),
@@ -187,32 +187,26 @@ class SettingsScreen extends StatelessWidget {
             horizontal: 16,
             vertical: 4,
           ),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: const Text(
-              'AD',
-              style: TextStyle(
-                color: Color(0xFFF9881F),
-                fontWeight: FontWeight.bold,
-                fontSize: 10,
-              ),
-            ),
+          leading: Image.asset(
+            'assets/images/ads_setting_sales.png',
+            width: 40,
+            height: 40,
           ),
           title: const Text(
             'Remove Ads',
             style: TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              fontSize: 20,
             ),
           ),
           subtitle: const Text(
-            'Go Premium for no limits',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+            'Become a PRO Member',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w300,
+            ),
           ),
           trailing: const Icon(
             Icons.arrow_forward_ios,
@@ -245,9 +239,9 @@ class SettingsScreen extends StatelessWidget {
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.grey.shade50, // Very subtle grey
+            color: Colors.grey.shade200, // Very subtle grey
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: Colors.grey.shade100),
           ),
           child: Column(
             children: [
@@ -273,8 +267,8 @@ class SettingsScreen extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: Image.asset(
         iconPath,
-        width: 32,
-        height: 32,
+        width: 34,
+        height: 34,
         errorBuilder: (_, __, ___) =>
             const Icon(Icons.settings, color: Colors.grey),
       ),

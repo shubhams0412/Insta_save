@@ -450,19 +450,22 @@ class _RepostScreenState extends State<RepostScreen>
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Post?"),
-        content: const Text("Are you sure you want to delete this post?"),
+        backgroundColor: Colors.white,
+        title: const Text("InstantSave"),
+        content: const Text(
+          "Are you sure you want to delete this media from my collection?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.black)),
+            child: const Text("No", style: TextStyle(color: Colors.black)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _deletePostFromList();
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            child: const Text("Yes", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -543,13 +546,17 @@ class _RepostScreenState extends State<RepostScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+            icon: const Icon(Icons.arrow_back_ios, color: Colors.grey),
             onPressed: () =>
                 Navigator.of(context).pop({'home': true, 'tab': targetTab}),
           ),
           if (widget.showHomeButton)
             IconButton(
-              icon: const Icon(Icons.home_outlined, color: Colors.black),
+              icon: Image.asset(
+                'assets/images/home.png',
+                width: 24,
+                height: 24,
+              ),
               onPressed: () async {
                 // 4. On tapping "home" icon of share screen (everytime)
                 await RatingService().checkAndShowRating(null, always: true);
@@ -687,63 +694,210 @@ class _RepostScreenState extends State<RepostScreen>
 
   Widget _buildToolbar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
+      child: Column(
         children: [
-          ToggleButtons(
-            isSelected: _alignmentSelections,
-            onPressed: (int index) {
-              setState(() {
-                for (int i = 0; i < _alignmentSelections.length; i++)
-                  _alignmentSelections[i] = (i == index);
-                if (index == 0) _tagAlignment = Alignment.bottomLeft;
-                if (index == 1) _tagAlignment = Alignment.bottomRight;
-                if (index == 2) _tagAlignment = Alignment.topLeft;
-                if (index == 3) _tagAlignment = Alignment.topRight;
-              });
-            },
-            borderRadius: BorderRadius.circular(8),
-            children: const [Text('L'), Text('R'), Text('TL'), Text('TR')],
-          ),
-          const Spacer(),
-          IconButton(
-            icon: Icon(_isTagVisible ? Icons.visibility : Icons.visibility_off),
-            onPressed: () => setState(() => _isTagVisible = !_isTagVisible),
-          ),
-          IconButton(
-            icon: const Icon(Icons.palette_outlined),
-            onPressed: _openTagEditor,
+          Row(
+            children: [
+              // 1. Position Selectors (L, R, T, B, @)
+              _buildPositionSelector('L', 0, Alignment.bottomLeft),
+              const SizedBox(width: 12),
+              _buildPositionSelector('R', 1, Alignment.bottomRight),
+              const SizedBox(width: 12),
+              _buildPositionSelector('TL', 2, Alignment.topLeft),
+              const SizedBox(width: 12),
+              _buildPositionSelector('TR', 3, Alignment.topRight),
+              const SizedBox(width: 12),
+              // Visibility Toggle (@)
+              GestureDetector(
+                onTap: () => setState(() => _isTagVisible = !_isTagVisible),
+                child: Text(
+                  '@',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    color: _isTagVisible ? Colors.black : Colors.grey,
+                  ),
+                ),
+              ),
+              const Spacer(),
+
+              // 2. Dark/Light & Color Pill
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7F7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (_tagBackgroundColor == Colors.black) {
+                            _tagBackgroundColor = Colors.white;
+                            _tagTextColor = Colors.black;
+                            _tagIconColor = Colors.black;
+                          } else {
+                            _tagBackgroundColor = Colors.black;
+                            _tagTextColor = Colors.white;
+                            _tagIconColor = Colors.white;
+                          }
+                        });
+                      },
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            size: 20,
+                            color: _tagBackgroundColor == Colors.black
+                                ? Colors.black
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _tagBackgroundColor == Colors.black
+                                ? "Dark"
+                                : "Light",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      height: 20,
+                      width: 1,
+                      color: Colors.grey.shade300,
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: _openTagEditor,
+                      child: Image.asset(
+                        'assets/images/colorpicker.png',
+                        width: 22,
+                        height: 22,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  Widget _buildPositionSelector(String label, int index, Alignment alignment) {
+    bool isSelected = _tagAlignment == alignment;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          for (int i = 0; i < _alignmentSelections.length; i++) {
+            _alignmentSelections[i] = (i == index);
+          }
+          _tagAlignment = alignment;
+          _isTagVisible = true;
+        });
+      },
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? Colors.white : Colors.grey,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCaptionSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: TextField(
-        controller: _captionController,
-        maxLines: 2,
-        decoration: InputDecoration(
-          labelText: "Caption",
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          suffixIcon: _captionController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.copy),
-                  onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(text: _captionController.text),
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Caption copied to clipboard"),
-                        duration: Duration(seconds: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F7F7),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _captionController,
+                maxLines: 2,
+                style: const TextStyle(fontSize: 15, color: Colors.black87),
+                decoration: const InputDecoration(
+                  hintText: "Enter caption...",
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                if (_captionController.text.isNotEmpty) {
+                  Clipboard.setData(
+                    ClipboardData(text: _captionController.text),
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Caption copied to clipboard"),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF636363),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.copy_all_outlined,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      "Copy",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
                       ),
-                    );
-                  },
-                )
-              : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

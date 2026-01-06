@@ -44,7 +44,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
           icon: const Icon(
             Icons.arrow_back_ios_new,
             size: 20,
-            color: Colors.black,
+            color: Colors.grey,
           ),
           onPressed: () => Navigator.pop(context),
         ),

@@ -48,11 +48,11 @@ The existing `sales_screen_config` parameter now includes two additional fields:
   "featuresStyle": {"textSize": 15, "textColor": "#FFFFFF"},
   "plansStyle": {"textSize": 18, "textColor": "#FFFFFF"},
   "features": [
-    {"text": "Download Unlimited Reels"},
-    {"text": "Download Stories & Highlights ✨"},
-    {"text": "Download Post & Videos"},
-    {"text": "No Ads"},
-    {"text": "Save Photos & Videos to Gallery"}
+    {"text": "Unlimited Reposts"},
+    {"text": "Stories & Highlights"},
+    {"text": "Photos Posts & Videos"},
+    {"text": "100% Ad-Free Experience"},
+    {"text": "Add Directly from the Gallery"}
   ],
   "plans": [
     {

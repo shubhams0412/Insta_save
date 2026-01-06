@@ -1,4 +1,4 @@
-package com.example.insta_save
+package com.video.downloader.saver.manager.free.allvideodownloader
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -6,10 +6,10 @@ import android.content.SharedPreferences
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
-class HomeWidgetProvider : HomeWidgetProvider() {
+class HomeWidgetProvider4 : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_layout).apply {
+            val views = RemoteViews(context.packageName, R.layout.widget_layout_4).apply {
                 
                 // 1. Import from Insta Intent
                 val importIntent = android.content.Intent(context, MainActivity::class.java).apply {

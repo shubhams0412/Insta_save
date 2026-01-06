@@ -25,6 +25,7 @@ import 'package:insta_save/services/download_manager.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/saved_post.dart';
 import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/screens/sales_screen.dart';
 
 import '../services/instagram_login_webview.dart';
 import '../widgets/status_dialog.dart';
@@ -60,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen>
   StreamSubscription? _downloadSubscription;
 
   static const platform = MethodChannel(
-    'com.example.insta_save/widget_actions',
+    'com.video.downloader.saver.manager.free.allvideodownloader/widget_actions',
   );
 
   @override
@@ -253,32 +254,46 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     // 1. Structure: Clean Scaffolding
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),
 
       // 2. Logic: Removed global AnimatedBuilder.
       // Only the bottom section listens to downloads now.
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // --- STATIC TOP SECTION (Won't rebuild on download) ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildTutorialCard(),
-                const SizedBox(height: 20),
-                _buildActionButtons(),
-                const SizedBox(height: 20),
-                _buildLinkInput(),
-                const SizedBox(height: 20),
+                // --- STATIC TOP SECTION (Won't rebuild on download) ---
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      _buildActionButtons(),
+                      const SizedBox(height: 10),
+                      _buildTutorialCard(),
+                      const SizedBox(height: 20),
+                      _buildLinkInput(),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+
+                // --- DYNAMIC BOTTOM SECTION (Rebuilds on download/tab change) ---
+                Expanded(child: _buildMediaTabsSection()),
+
+                // Space for PRO card
+                const SizedBox(height: 90),
               ],
             ),
-          ),
 
-          // --- DYNAMIC BOTTOM SECTION (Rebuilds on download/tab change) ---
-          Expanded(child: _buildMediaTabsSection()),
-        ],
+            // --- UPGRADE TO PRO CARD (Fixed at bottom) ---
+            Positioned(bottom: 16, left: 16, right: 16, child: _buildProCard()),
+          ],
+        ),
       ),
       bottomNavigationBar: null,
     );
@@ -287,90 +302,143 @@ class _HomeScreenState extends State<HomeScreen>
   AppBar _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent, // Fixes M3 scroll tint
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
       title: const Text(
-        "InstaSave",
+        "InstantSave",
         style: TextStyle(
-          fontFamily: "InstaFont",
-          fontSize: 28,
+          fontFamily: "Lobster",
+          fontSize: 36,
           color: Colors.black,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w500,
         ),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.settings, size: 26, color: Colors.black87),
+          icon: Image.asset(
+            'assets/images/ads.png',
+            width: 24,
+            height: 24,
+          ), // Placeholder for "No Ads"
+          onPressed: navigateToSalesPage,
+        ),
+        IconButton(
+          icon: Image.asset(
+            'assets/images/Settings.png',
+            width: 24,
+            height: 24,
+          ),
           onPressed: navigateToSettingScreen,
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 8),
       ],
     );
   }
 
   // --- WIDGET: Tutorial Card ---
   Widget _buildTutorialCard() {
-    return GestureDetector(
-      onTap: () {
-        FocusManager.instance.primaryFocus?.unfocus();
-        Navigator.of(context).push(
-          createSlideRoute(const TutorialScreen(), direction: SlideFrom.right),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.lightbulb_outline, color: Colors.amber, size: 28),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "How to Repost a Post?",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  Text(
-                    "Discover step-by-step guidance with our guide.",
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.of(context).push(
+              createSlideRoute(
+                const TutorialScreen(
+                  title: "How to Use Select Pics & Repost?",
+                  steps: TutorialScreen.selectPicsSteps,
+                ),
+                direction: SlideFrom.right,
               ),
-            ),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-          ],
+            );
+          },
+          child: Row(
+            children: [
+              const Icon(Icons.info_outlined, color: Colors.black54, size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                "How to Use Select Pics & Repost?",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black54,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
   // --- WIDGET: Action Buttons (Gradient) ---
   Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: _gradientButton(
-            title: "Import from Insta",
-            colors: const [Color(0xFFEE2A7B), Color(0xFF7F2BCB)],
-            icon: Icons.camera_alt_outlined,
-            onTap: () => showTutorialDialog(context),
+    return GestureDetector(
+      onTap: pickImageFromGallery,
+      child: Container(
+        height: 85,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          image: const DecorationImage(
+            image: AssetImage('assets/images/pic_repost_background.png'),
+            fit: BoxFit.cover,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _gradientButton(
-            title: "Select Pics & Repost",
-            colors: const [Color(0xFF4A90E2), Color(0xFF50E3C2)],
-            icon: Icons.repeat,
-            onTap: pickImageFromGallery,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Row(
+            children: [
+              // Icon Container
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(51), // 0.2 opacity
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/pics_repost.png',
+                    width: 30,
+                    height: 30,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 15),
+              // Text section
+              const Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Select Pics & Repost",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "Tap to choose images",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+              // Arrow
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 20,
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -384,7 +452,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       child: Row(
         children: [
-          // Text Field
           Expanded(
             child: TextField(
               controller: _linkController,
@@ -398,60 +465,12 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
           ),
-
-          // Button (changes based on state)
           Padding(
             padding: const EdgeInsets.all(6),
             child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _linkController,
               builder: (context, value, child) {
                 final hasText = value.text.isNotEmpty;
-
-                // Show Login button when has text and not logged in AND login flow is enabled
-                if (hasText &&
-                    !_isLoggedIn &&
-                    RemoteConfigService().isInstaLoginFlowEnabled) {
-                  return GestureDetector(
-                    onTap: () =>
-                        navigateToPreviewScreen(context, _linkController),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFFFFCF1F),
-                            Color(0xFFF76B17),
-                            Color(0xFFFC01CA),
-                            Color(0xFF7E0BFD),
-                          ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.login, size: 16, color: Colors.white),
-                          SizedBox(width: 6),
-                          Text(
-                            "Login",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                // Show Go button when has text and logged in
                 if (hasText) {
                   return GestureDetector(
                     onTap: () =>
@@ -468,12 +487,6 @@ class _HomeScreenState extends State<HomeScreen>
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.arrow_forward,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          SizedBox(width: 6),
                           Text(
                             "Go",
                             style: TextStyle(
@@ -482,35 +495,44 @@ class _HomeScreenState extends State<HomeScreen>
                               fontSize: 14,
                             ),
                           ),
+                          SizedBox(width: 6),
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                         ],
                       ),
                     ),
                   );
                 }
-
-                // Default: Paste link button
                 return GestureDetector(
                   onTap: pasteInstagramLink,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
-                      vertical: 10,
+                      vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: const Color(0xFF6C6C6C),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.link, size: 16, color: Colors.grey.shade700),
-                        const SizedBox(width: 6),
-                        Text(
+                        Image.asset(
+                          'assets/images/pastelink.png',
+                          width: 18,
+                          height: 18,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
                           "Paste link",
                           style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 16,
                           ),
                         ),
                       ],
@@ -555,8 +577,8 @@ class _HomeScreenState extends State<HomeScreen>
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
-                "Reposted Media",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                "My Saved Collection",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
               ),
             ),
             const SizedBox(height: 10),
@@ -565,9 +587,10 @@ class _HomeScreenState extends State<HomeScreen>
               indicatorColor: Colors.black,
               labelColor: Colors.black,
               unselectedLabelColor: Colors.grey,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
               tabs: const [
                 Tab(text: "Posts"),
-                Tab(text: "Reels"),
+                Tab(text: "Videos"),
                 Tab(text: "Device Media"),
               ],
             ),
@@ -868,34 +891,68 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _gradientButton({
-    required String title,
-    required List<Color> colors,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildProCard() {
     return GestureDetector(
-      onTap: onTap,
+      onTap: navigateToSalesPage,
       child: Container(
-        height: 110,
+        height: 80,
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: colors),
-          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF9500), Color(0xFFFF4B2B)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(15),
         ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 26),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(51),
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/crown.png',
+                    width: 32,
+                    height: 32,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Upgrade to PRO",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      "Unlock unlimited downloads",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w300,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 20,
               ),
             ],
           ),
@@ -1149,6 +1206,13 @@ class _HomeScreenState extends State<HomeScreen>
     Navigator.of(context).push(
       createSlideRoute(const SettingsScreen(), direction: SlideFrom.right),
     );
+  }
+
+  void navigateToSalesPage() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.of(
+      context,
+    ).push(createSlideRoute(const SalesScreen(), direction: SlideFrom.bottom));
   }
 
   Future<String> _getDeviceId() async {

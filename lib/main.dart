@@ -95,21 +95,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  AppLifecycleState? _lastState;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    debugPrint("App Open Ad Flow: Lifecycle State Changed: $state");
-    if (state == AppLifecycleState.resumed) {
+    debugPrint(
+      "App Open Ad Flow: Lifecycle State Changed: $state (Previous: $_lastState)",
+    );
+
+    // Only show ad if we were previously in 'paused' state (true background)
+    // and NOT from 'inactive' (which happens on notifications/overlays)
+    if (state == AppLifecycleState.resumed &&
+        _lastState == AppLifecycleState.paused) {
       if (navigatorKey.currentContext != null) {
         debugPrint(
-          "App Open Ad Flow: Calling showAppOpenAdWithLoader from Lifecycle",
+          "App Open Ad Flow: Calling showAppOpenAdWithLoader from Lifecycle (Background to Foreground)",
         );
         AdService().showAppOpenAdWithLoader(navigatorKey.currentContext!);
-      } else {
-        debugPrint(
-          "App Open Ad Flow: navigatorKey.currentContext is NULL on Resume",
-        );
       }
     }
+    _lastState = state;
   }
 
   @override

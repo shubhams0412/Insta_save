@@ -120,7 +120,7 @@
 # ==============================================================================
 
 # Replace with your actual package name if different
--keep class com.example.insta_save.** { *; }
+-keep class com.video.downloader.saver.manager.free.allvideodownloader.** { *; }
 -keep class * extends io.flutter.embedding.android.FlutterActivity
 -keep class * extends io.flutter.embedding.android.FlutterFragmentActivity
 -keep class androidx.lifecycle.DefaultLifecycleObserver { *; }

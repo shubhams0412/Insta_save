@@ -1,4 +1,4 @@
-package com.example.insta_save
+package com.video.downloader.saver.manager.free.allvideodownloader
 
 import io.flutter.plugins.GeneratedPluginRegistrant;
 import android.content.ContentValues
@@ -17,7 +17,7 @@ class MainActivity : FlutterActivity() {
 
     private val MEDIA_CHANNEL = "media_store"
     private val INSTA_CHANNEL = "insta_share"
-    private val WIDGET_CHANNEL = "com.example.insta_save/widget_actions"
+    private val WIDGET_CHANNEL = "com.video.downloader.saver.manager.free.allvideodownloader/widget_actions"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

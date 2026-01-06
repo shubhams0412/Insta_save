@@ -22,8 +22,6 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  // 0 = Annual, 1 = Monthly
-  int _selectedPlanIndex = 0;
   bool _isLoading = true;
   SalesConfig? _config;
 
@@ -88,7 +86,7 @@ class _SalesScreenState extends State<SalesScreen> {
                             children: [
                               SizedBox(
                                 height:
-                                    MediaQuery.of(context).size.height * 0.08,
+                                    MediaQuery.of(context).size.height * 0.22,
                               ),
 
                               // HEADER
@@ -97,11 +95,11 @@ class _SalesScreenState extends State<SalesScreen> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: _config?.titleColor ?? Colors.white,
-                                  fontSize: _config?.titleSize ?? 28,
+                                  fontSize: _config?.titleSize ?? 30,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Text(
                                 _config?.subTitleText ??
                                     'No commitment, cancel anytime',
@@ -109,10 +107,10 @@ class _SalesScreenState extends State<SalesScreen> {
                                 style: TextStyle(
                                   color:
                                       _config?.subTitleColor ?? Colors.white70,
-                                  fontSize: _config?.subTitleSize ?? 16,
+                                  fontSize: _config?.subTitleSize ?? 18,
                                 ),
                               ),
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 40),
 
                               // FEATURES LIST
                               _buildSectionHeader('WHAT YOU GET'),
@@ -125,37 +123,23 @@ class _SalesScreenState extends State<SalesScreen> {
                                     textColor: _config!.featureColor,
                                   ),
                                 ),
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 40),
 
-                              // PLANS
-                              _buildSectionHeader('CHOOSE PLAN'),
-                              const SizedBox(height: 30),
-
-                              if (_config != null)
-                                ...List.generate(_config!.plans.length, (
-                                  index,
-                                ) {
-                                  final plan = _config!.plans[index];
-                                  return Column(
-                                    children: [
-                                      _PlanCard(
-                                        index: index,
-                                        isSelected: _selectedPlanIndex == index,
-                                        title: plan['title'],
-                                        subtitle: plan['subtitle'],
-                                        price: plan['price'],
-                                        originalPrice: plan['originalPrice'],
-                                        badgeText: plan['badgeText'],
-                                        titleSize: _config!.planSize,
-                                        titleColor: _config!.planColor,
-                                        onTap: () => setState(
-                                          () => _selectedPlanIndex = index,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 20),
-                                    ],
-                                  );
-                                }),
+                              // ANNUAL PLAN
+                              if (_config != null && _config!.plans.isNotEmpty)
+                                _PlanCard(
+                                  index: 0,
+                                  isSelected: true,
+                                  title: _config!.plans[0]['title'],
+                                  subtitle: _config!.plans[0]['subtitle'],
+                                  price: _config!.plans[0]['price'],
+                                  originalPrice:
+                                      _config!.plans[0]['originalPrice'],
+                                  badgeText: _config!.plans[0]['badgeText'],
+                                  titleSize: _config!.planSize,
+                                  titleColor: _config!.planColor,
+                                  onTap: () {},
+                                ),
 
                               const SizedBox(height: 30),
                             ],
@@ -189,7 +173,6 @@ class _SalesScreenState extends State<SalesScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   // TODO: Implement Purchase Logic
-                                  print("Selected Plan: $_selectedPlanIndex");
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
@@ -220,12 +203,22 @@ class _SalesScreenState extends State<SalesScreen> {
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: const Text(
-                                'Restore Purchase',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Colors.white,
+                                      width: 0.5, // Adjust thickness here
+                                    ),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Restore Purchase',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ),

@@ -204,6 +204,8 @@ class DownloadManager extends ChangeNotifier {
   }
 
   bool isBatchDownloading(String postUrl) {
-    return _activeTasks.any((t) => t.postUrl == postUrl);
+    return _activeTasks.any(
+      (t) => t.postUrl == postUrl && !t.isCompleted.value,
+    );
   }
 }

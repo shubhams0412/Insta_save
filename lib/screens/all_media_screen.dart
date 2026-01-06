@@ -203,7 +203,7 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       backgroundColor: Colors.white,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+        icon: const Icon(Icons.arrow_back_ios, color: Colors.grey),
         onPressed: () {
           if (_isSelectionMode) {
             _toggleSelectionMode();
