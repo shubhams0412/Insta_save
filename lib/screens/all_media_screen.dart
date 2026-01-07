@@ -79,21 +79,32 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Items?"),
+        title: const Text(
+          "Delete Items?",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
         content: Text(
           "Are you sure you want to delete ${_selectedPaths.length} items?",
+          style: TextStyle(fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.black)),
+            child: const Text(
+              "No",
+              style: TextStyle(color: Colors.black, fontSize: 16),
+            ),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _performDeletion();
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "Yes",
+              style: TextStyle(color: Colors.red, fontSize: 16),
+            ),
           ),
         ],
       ),
@@ -258,13 +269,17 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.perm_media_outlined,
-            size: 64,
-            color: Colors.grey.shade300,
+          Image.asset('assets/images/placeholder.png', width: 50, height: 50),
+          const SizedBox(height: 14),
+          const Text(
+            "You haven't shared\nany posts yet.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.black,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          const SizedBox(height: 16),
-          Text("No media found", style: TextStyle(color: Colors.grey.shade500)),
         ],
       ),
     );
@@ -369,9 +384,12 @@ class MediaGridItem extends StatelessWidget {
         children: [
           // 1. Background Image/Video Thumb
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(20),
             child: _buildThumbnail(),
           ),
+
+          // Username Overlay
+          _buildUsernameOverlay(post.username),
 
           // 2. Selection Overlay
           if (isSelectionMode) ...[
@@ -379,7 +397,7 @@ class MediaGridItem extends StatelessWidget {
               Container(
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
                 ),
               ),
             Positioned(
@@ -401,6 +419,36 @@ class MediaGridItem extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildUsernameOverlay(String username) {
+    return Align(
+      alignment: Alignment.bottomLeft,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(8, 20, 8, 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+            ),
+          ),
+          child: Text(
+            "@${username.replaceAll('@', '')}",
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ),
     );
   }

@@ -20,12 +20,12 @@ import 'package:insta_save/screens/edit_post_screen.dart';
 import 'package:insta_save/screens/preview_screen.dart';
 import 'package:insta_save/screens/repost_screen.dart';
 import 'package:insta_save/screens/setting_screen.dart';
-import 'package:insta_save/screens/tutorial_screen.dart';
 import 'package:insta_save/services/download_manager.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/saved_post.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/screens/sales_screen.dart';
+import 'package:insta_save/utils/constants.dart';
 
 import '../services/instagram_login_webview.dart';
 import '../widgets/status_dialog.dart';
@@ -305,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen>
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       title: const Text(
-        "InstantSave",
+        Constants.AppName,
         style: TextStyle(
           fontFamily: "Lobster",
           fontSize: 36,
@@ -590,7 +590,7 @@ class _HomeScreenState extends State<HomeScreen>
               labelStyle: const TextStyle(fontWeight: FontWeight.bold),
               tabs: const [
                 Tab(text: "Posts"),
-                Tab(text: "Videos"),
+                Tab(text: "Reels"),
                 Tab(text: "Device Media"),
               ],
             ),
@@ -665,7 +665,24 @@ class _HomeScreenState extends State<HomeScreen>
     int totalCount = activeTasks.length + filteredMediaList.length;
 
     if (totalCount == 0) {
-      return const Center(child: Text("No media found."));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset('assets/images/placeholder.png', width: 50, height: 50),
+            const SizedBox(height: 14),
+            const Text(
+              "You haven't shared\nany posts yet.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.black,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     // Determine how many items to show (Max 6)
@@ -705,44 +722,44 @@ class _HomeScreenState extends State<HomeScreen>
         ),
 
         if (showViewAll)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
-            child: TextButton(
-              // Inside HomeScreen (usually in the _buildLimitedGrid or similar)
-              onPressed: () async {
-                // ✅ Catch the returned list from AllMediaScreen
-                await Navigator.of(context).push(
-                  createSlideRoute(
-                    AllMediaScreen(
-                      title: viewAllTitle,
-                      mediaList: filteredMediaList,
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: TextButton(
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    createSlideRoute(
+                      AllMediaScreen(
+                        title: viewAllTitle,
+                        mediaList: filteredMediaList,
+                      ),
+                      direction: SlideFrom.right,
                     ),
-                    direction: SlideFrom.right,
+                  );
+                  _refreshGalleryDataSilently();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey.shade600,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                );
-
-                // Always refresh from disk/prefs to ensure we have the FULL list (Posts + Reels)
-                // and not just the subset returned by AllMediaScreen.
-                _refreshGalleryDataSilently();
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.black,
-                backgroundColor: Colors.grey.shade100,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
                 ),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "View All",
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(Icons.arrow_forward, size: 16),
-                ],
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "View All",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  ],
+                ),
               ),
             ),
           ),
@@ -856,24 +873,30 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildImageGridItem(SavedPost post) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.file(
-        File(post.localPath),
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            const Icon(Icons.error, color: Colors.grey),
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.file(
+            File(post.localPath),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.error, color: Colors.grey),
+          ),
+          _buildUsernameOverlay(post.username),
+        ],
       ),
     );
   }
 
   Widget _buildReelGridItem(SavedPost post, String? thumbPath) {
-    return Stack(
-      alignment: Alignment.center,
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: thumbPath != null
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        alignment: Alignment.center,
+        fit: StackFit.expand,
+        children: [
+          thumbPath != null
               ? Image.file(
                   File(thumbPath),
                   fit: BoxFit.cover,
@@ -885,13 +908,45 @@ class _HomeScreenState extends State<HomeScreen>
                   width: double.infinity,
                   height: double.infinity,
                 ),
+          _buildUsernameOverlay(post.username),
+          const Center(
+            child: Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsernameOverlay(String username) {
+    return Align(
+      alignment: Alignment.bottomLeft,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(8, 20, 8, 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+          ),
         ),
-        const Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
-      ],
+        child: Text(
+          "@${username.replaceAll('@', '')}",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
     );
   }
 
   Widget _buildProCard() {
+    final homeConfig = RemoteConfigService().homeConfig;
+
     return GestureDetector(
       onTap: navigateToSalesPage,
       child: Container(
@@ -925,24 +980,25 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Upgrade to PRO",
+                      homeConfig?.proCardTitle ?? "Upgrade to PRO",
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
+                        color: homeConfig?.proCardTitleColor ?? Colors.white,
+                        fontSize: homeConfig?.proCardTitleSize ?? 20,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     Text(
-                      "Unlock unlimited downloads",
+                      homeConfig?.proCardSubtitle ??
+                          "Unlock unlimited downloads",
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
+                        color: homeConfig?.proCardSubtitleColor ?? Colors.white,
+                        fontSize: homeConfig?.proCardSubtitleSize ?? 16,
                         fontWeight: FontWeight.w300,
                       ),
                     ),

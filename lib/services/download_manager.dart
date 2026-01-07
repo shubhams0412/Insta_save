@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/utils/constants.dart';
 
 class DownloadTask {
   final String id;
@@ -105,7 +106,7 @@ class DownloadManager extends ChangeNotifier {
             filePath: filePath,
             fileName: fileName,
             skipIfExists: true,
-            androidRelativePath: 'Pictures/InstaSave',
+            androidRelativePath: 'Pictures/${Constants.AppName}',
           );
           _completeTask(task, filePath);
         },

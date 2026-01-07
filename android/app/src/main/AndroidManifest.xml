@@ -7,6 +7,7 @@
     <!-- ✅ For Android 13+ (API 33+), this one is better -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     
     <!-- ✅ Required for Firebase & API calls in Release Mode -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -91,10 +92,10 @@
                 android:name="flutterEmbedding"
                 android:value="2" />
 
-        <!-- AdMob App ID (Test) -->
+        <!-- AdMob App ID (Release) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-5077207467736717~7997822123"/>
 
         <provider
                 android:name="vn.hunghd.flutterdownloader.DownloadedFileProvider"

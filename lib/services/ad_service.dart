@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,19 +16,27 @@ class AdService {
 
   AdService._internal();
 
-  // Test Ad Unit IDs
-  final String _bannerAdUnitIdAndroid =
-      'ca-app-pub-3940256099942544/6300978111';
-  final String _bannerAdUnitIdiOS = 'ca-app-pub-3940256099942544/2934735716';
+  // Ad Unit IDs
+  final String _bannerAdUnitIdAndroid = kDebugMode
+      ? 'ca-app-pub-3940256099942544/6300978111'
+      : 'ca-app-pub-3940256099942544/6300978111'; // TODO: Update with prod ID if available
+  final String _bannerAdUnitIdiOS = kDebugMode
+      ? 'ca-app-pub-3940256099942544/2934735716'
+      : 'ca-app-pub-3940256099942544/2934735716'; // TODO: Update with prod ID if available
 
-  final String _interstitialAdUnitIdAndroid =
-      'ca-app-pub-3940256099942544/1033173712';
-  final String _interstitialAdUnitIdiOS =
-      'ca-app-pub-3940256099942544/4411468910';
+  final String _interstitialAdUnitIdAndroid = kDebugMode
+      ? 'ca-app-pub-3940256099942544/1033173712'
+      : 'ca-app-pub-5077207467736717/9007651461';
+  final String _interstitialAdUnitIdiOS = kDebugMode
+      ? 'ca-app-pub-3940256099942544/4411468910'
+      : 'ca-app-pub-5077207467736717/9007651461';
 
-  final String _appOpenAdUnitIdAndroid =
-      'ca-app-pub-3940256099942544/9257395921';
-  final String _appOpenAdUnitIdiOS = 'ca-app-pub-3940256099942544/5662855259';
+  final String _appOpenAdUnitIdAndroid = kDebugMode
+      ? 'ca-app-pub-3940256099942544/9257395921'
+      : 'ca-app-pub-5077207467736717/7694569793';
+  final String _appOpenAdUnitIdiOS = kDebugMode
+      ? 'ca-app-pub-3940256099942544/5662855259'
+      : 'ca-app-pub-5077207467736717/7694569793';
 
   AppOpenAd? _appOpenAd;
   bool _isShowingAppOpenAd = false;

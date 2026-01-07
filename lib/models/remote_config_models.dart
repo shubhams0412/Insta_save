@@ -171,3 +171,70 @@ class AdsConfig {
     );
   }
 }
+
+class HomeConfig {
+  final String proCardTitle;
+  final double proCardTitleSize;
+  final Color proCardTitleColor;
+  final String proCardSubtitle;
+  final double proCardSubtitleSize;
+  final Color proCardSubtitleColor;
+
+  HomeConfig({
+    required this.proCardTitle,
+    required this.proCardTitleSize,
+    required this.proCardTitleColor,
+    required this.proCardSubtitle,
+    required this.proCardSubtitleSize,
+    required this.proCardSubtitleColor,
+  });
+
+  factory HomeConfig.fromJson(Map<String, dynamic> json) {
+    return HomeConfig(
+      proCardTitle: json['proCard']['title'],
+      proCardTitleSize: (json['proCard']['titleSize'] as num).toDouble(),
+      proCardTitleColor: RemoteConfigModels.parseColor(
+        json['proCard']['titleColor'],
+      ),
+      proCardSubtitle: json['proCard']['subtitle'],
+      proCardSubtitleSize: (json['proCard']['subtitleSize'] as num).toDouble(),
+      proCardSubtitleColor: RemoteConfigModels.parseColor(
+        json['proCard']['subtitleColor'],
+      ),
+    );
+  }
+}
+
+class SettingsConfig {
+  final String adsBannerTitle;
+  final double adsBannerTitleSize;
+  final Color adsBannerTitleColor;
+  final String adsBannerSubtitle;
+  final double adsBannerSubtitleSize;
+  final Color adsBannerSubtitleColor;
+
+  SettingsConfig({
+    required this.adsBannerTitle,
+    required this.adsBannerTitleSize,
+    required this.adsBannerTitleColor,
+    required this.adsBannerSubtitle,
+    required this.adsBannerSubtitleSize,
+    required this.adsBannerSubtitleColor,
+  });
+
+  factory SettingsConfig.fromJson(Map<String, dynamic> json) {
+    return SettingsConfig(
+      adsBannerTitle: json['adsBanner']['title'],
+      adsBannerTitleSize: (json['adsBanner']['titleSize'] as num).toDouble(),
+      adsBannerTitleColor: RemoteConfigModels.parseColor(
+        json['adsBanner']['titleColor'],
+      ),
+      adsBannerSubtitle: json['adsBanner']['subtitle'],
+      adsBannerSubtitleSize: (json['adsBanner']['subtitleSize'] as num)
+          .toDouble(),
+      adsBannerSubtitleColor: RemoteConfigModels.parseColor(
+        json['adsBanner']['subtitleColor'],
+      ),
+    );
+  }
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:insta_save/utils/constants.dart';
 
 class WidgetsScreen extends StatefulWidget {
   const WidgetsScreen({super.key});
@@ -22,7 +23,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
   final List<String> _steps = [
     "From the Home Screen, touch and hold a widget or empty space until your apps jiggle.",
     "Tap the Add (+) button in the upper-left corner.",
-    "Scroll until you find InstaSave.",
+    "Scroll until you find ${Constants.AppName}.",
     "Choose your preferred widget size and press Add Widget.",
   ];
 

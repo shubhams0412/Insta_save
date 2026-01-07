@@ -14,6 +14,8 @@ class RemoteConfigService {
   IntroConfig? _introConfig;
   RatingConfig? _ratingConfig;
   AdsConfig? _adsConfig;
+  HomeConfig? _homeConfig;
+  SettingsConfig? _settingsConfig;
   bool _isInstaLoginFlowEnabled = true;
   String _privacyUrl = 'https://turbofast.io/privacy/';
   String _termsUrl = 'https://turbofast.io/terms/';
@@ -23,6 +25,8 @@ class RemoteConfigService {
   IntroConfig? get introConfig => _introConfig;
   RatingConfig? get ratingConfig => _ratingConfig;
   AdsConfig? get adsConfig => _adsConfig;
+  HomeConfig? get homeConfig => _homeConfig;
+  SettingsConfig? get settingsConfig => _settingsConfig;
   bool get isInstaLoginFlowEnabled => _isInstaLoginFlowEnabled;
   String get privacyUrl => _privacyUrl;
   String get termsUrl => _termsUrl;
@@ -110,6 +114,30 @@ class RemoteConfigService {
         debugPrint('Error parsing AdsConfig: $e');
       }
     }
+
+    // Parse Home Config
+    String homeJson = _remoteConfig.getString(
+      'home_screen_sales_banner_config',
+    );
+    if (homeJson.isNotEmpty) {
+      try {
+        _homeConfig = HomeConfig.fromJson(jsonDecode(homeJson));
+      } catch (e) {
+        debugPrint('Error parsing HomeConfig: $e');
+      }
+    }
+
+    // Parse Settings Config
+    String settingsJson = _remoteConfig.getString(
+      'settings_screen_sales_banner_config',
+    );
+    if (settingsJson.isNotEmpty) {
+      try {
+        _settingsConfig = SettingsConfig.fromJson(jsonDecode(settingsJson));
+      } catch (e) {
+        debugPrint('Error parsing SettingsConfig: $e');
+      }
+    }
   }
 
   Map<String, dynamic> _getDefaults() {
@@ -177,6 +205,26 @@ class RemoteConfigService {
         "banner": true,
         "interstitial": true,
         "appOpen": true,
+      }),
+      "home_screen_sales_banner_config": jsonEncode({
+        "proCard": {
+          "title": "Upgrade to PRO",
+          "titleSize": 20,
+          "titleColor": "#FFFFFF",
+          "subtitle": "Unlock unlimited downloads",
+          "subtitleSize": 16,
+          "subtitleColor": "#FFFFFF",
+        },
+      }),
+      "settings_screen_sales_banner_config": jsonEncode({
+        "adsBanner": {
+          "title": "Remove Ads",
+          "titleSize": 20,
+          "titleColor": "#FFFFFF",
+          "subtitle": "Become a PRO Member",
+          "subtitleSize": 16,
+          "subtitleColor": "#FFFFFF",
+        },
       }),
     };
   }

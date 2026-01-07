@@ -10,6 +10,7 @@ import 'package:insta_save/services/webview_screen.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/services/ad_service.dart';
 import 'package:insta_save/services/rating_service.dart';
+import 'package:insta_save/utils/constants.dart';
 
 import '_buildStepCard.dart';
 
@@ -93,7 +94,10 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () {
                       AdService().setPausedForShare(true);
                       Share.share(
-                        'Check out InstaSave! Download unlimited reels and posts easily.',
+                        '📲 Share ${Constants.AppName} with Friends!\n\n'
+                        'Love saving Reels, Stories & Posts?\n'
+                        'Share ${Constants.AppName} and let your friends get their favorite social content too!\n'
+                        '🔗 ${Constants.App_Store_URL}',
                       );
                     },
                   ),
@@ -160,6 +164,8 @@ class SettingsScreen extends StatelessWidget {
   // --- WIDGETS ---
 
   Widget _buildRemoveAdsBanner(BuildContext context) {
+    final settingsConfig = RemoteConfigService().settingsConfig;
+
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -192,19 +198,19 @@ class SettingsScreen extends StatelessWidget {
             width: 40,
             height: 40,
           ),
-          title: const Text(
-            'Remove Ads',
+          title: Text(
+            settingsConfig?.adsBannerTitle ?? 'Remove Ads',
             style: TextStyle(
-              color: Colors.white,
+              color: settingsConfig?.adsBannerTitleColor ?? Colors.white,
               fontWeight: FontWeight.w500,
-              fontSize: 20,
+              fontSize: settingsConfig?.adsBannerTitleSize ?? 20,
             ),
           ),
-          subtitle: const Text(
-            'Become a PRO Member',
+          subtitle: Text(
+            settingsConfig?.adsBannerSubtitle ?? 'Become a PRO Member',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
+              color: settingsConfig?.adsBannerSubtitleColor ?? Colors.white,
+              fontSize: settingsConfig?.adsBannerSubtitleSize ?? 16,
               fontWeight: FontWeight.w300,
             ),
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:insta_save/utils/constants.dart';
 
 // If you have the file, keep your import.
 // If not, I have included the OptionCard class at the bottom of this file.
@@ -87,7 +88,7 @@ class _WidgetHeader extends StatelessWidget {
       ),
       child: const Center(
         child: Text(
-          "InstaSave",
+          Constants.AppName,
           style: TextStyle(
             fontFamily: "Pacifico", // Ensure this font is in pubspec.yaml
             fontSize: 28,
@@ -106,13 +107,9 @@ class _RowLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: _buildImportButton(),
-        ),
+        Expanded(child: _buildImportButton()),
         const SizedBox(width: 16),
-        Expanded(
-          child: _buildRepostButton(),
-        ),
+        Expanded(child: _buildRepostButton()),
       ],
     );
   }
@@ -125,15 +122,9 @@ class _ColumnLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SizedBox(
-            width: double.infinity,
-            child: _buildImportButton()
-        ),
+        SizedBox(width: double.infinity, child: _buildImportButton()),
         const SizedBox(height: 12),
-        SizedBox(
-            width: double.infinity,
-            child: _buildRepostButton()
-        ),
+        SizedBox(width: double.infinity, child: _buildRepostButton()),
       ],
     );
   }
@@ -145,7 +136,7 @@ class _ColumnLayout extends StatelessWidget {
 
 Widget _buildImportButton() {
   return const OptionCard(
-    title: "Import from Insta",
+    title: "Import",
     icon: Icons.camera_alt,
     colors: [Color(0xFFFF3E8E), Color(0xFFBC06FF)],
   );

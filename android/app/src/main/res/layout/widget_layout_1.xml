@@ -41,8 +41,7 @@
                 android:layout_width="50dp"
                 android:layout_height="50dp"
                 android:layout_gravity="center"
-                android:src="@drawable/ic_repost"
-                android:tint="#FFFFFF" />
+                android:src="@drawable/pics_repost" />
         </FrameLayout>
 
         <TextView

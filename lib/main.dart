@@ -8,6 +8,8 @@ import 'package:insta_save/screens/home_screen.dart'; // Renamed for consistency
 import 'package:insta_save/screens/intro_screen.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/services/ad_service.dart';
+import 'package:insta_save/services/notification_service.dart';
+import 'package:insta_save/utils/constants.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -16,6 +18,9 @@ Future<void> main() async {
 
   // Initialize Firebase
   await Firebase.initializeApp();
+
+  // Initialize Notification Service
+  await NotificationService().init();
 
   // 1. Lock Orientation to Portrait (Optional but recommended for this type of app)
   await SystemChrome.setPreferredOrientations([
@@ -121,7 +126,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'InstaSave',
+      title: Constants.AppName,
       debugShowCheckedModeBanner: false,
 
       // 4. Proper Material 3 Theme Configuration
