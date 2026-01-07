@@ -14,6 +14,7 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:insta_save/services/ad_service.dart'; // Import this
 import 'package:insta_save/services/rating_service.dart';
+import 'package:insta_save/services/notification_service.dart';
 
 import 'package:insta_save/screens/all_media_screen.dart';
 import 'package:insta_save/screens/edit_post_screen.dart';
@@ -111,6 +112,23 @@ class _HomeScreenState extends State<HomeScreen>
 
     // Check Instagram login status
     _checkLoginStatus();
+
+    // Request notification permission when user reaches home for the first time
+    _requestNotificationPermission();
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(
+        allowList: <String>{'isNotificationPermissionAsked'},
+      ),
+    );
+    bool alreadyAsked = prefs.getBool('isNotificationPermissionAsked') ?? false;
+
+    if (!alreadyAsked) {
+      await NotificationService().requestPermissions();
+      await prefs.setBool('isNotificationPermissionAsked', true);
+    }
   }
 
   Future<void> _checkLoginStatus() async {
@@ -345,10 +363,7 @@ class _HomeScreenState extends State<HomeScreen>
             FocusManager.instance.primaryFocus?.unfocus();
             Navigator.of(context).push(
               createSlideRoute(
-                const TutorialScreen(
-                  title: "How to Use Select Pics & Repost?",
-                  steps: TutorialScreen.selectPicsSteps,
-                ),
+                const TutorialScreen(title: "How to Use Select Pics & Repost?"),
                 direction: SlideFrom.right,
               ),
             );
@@ -590,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen>
               labelStyle: const TextStyle(fontWeight: FontWeight.bold),
               tabs: const [
                 Tab(text: "Posts"),
-                Tab(text: "Reels"),
+                Tab(text: "Videos"),
                 Tab(text: "Device Media"),
               ],
             ),

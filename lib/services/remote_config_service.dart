@@ -184,10 +184,11 @@ class RemoteConfigService {
       "intro_screen_config": jsonEncode({
         "items": [
           {"title": "Grab Reels, Stories &\nPosts in just one tap"},
-          {"title": "Repost Your Favorite\nInstagram Posts!"},
+          {"title": "Repost Your Favorite\nMoments – Instantly!"},
         ],
         "titleSize": 24.0,
         "titleColor": "#000000",
+        "buttonText": "Get Started",
       }),
       "rating_screen_config": jsonEncode({
         "title": "Loved by Thousands",

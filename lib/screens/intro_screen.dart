@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:insta_save/screens/rating_screen.dart';
@@ -15,11 +16,25 @@ class IntroScreen extends StatefulWidget {
 
 class _IntroScreenState extends State<IntroScreen> {
   final PageController _pageController = PageController();
+  Timer? _autoSwipeTimer;
 
   @override
   void initState() {
     super.initState();
     _loadConfig();
+    _startAutoSwipe();
+  }
+
+  void _startAutoSwipe() {
+    _autoSwipeTimer = Timer(const Duration(seconds: 3), () {
+      if (_pageController.hasClients && _pageController.page == 0) {
+        _pageController.animateToPage(
+          1,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   Future<void> _loadConfig() async {
@@ -41,13 +56,14 @@ class _IntroScreenState extends State<IntroScreen> {
     ),
     IntroItem(
       image: 'assets/images/intro_02.png',
-      title: "Repost Your Favorite\nInstagram Posts!",
+      title: "Repost Your Favorite\nMoments – Instantly!",
       rotation: 0.1, // Slight rotation for the second image
     ),
   ];
 
   @override
   void dispose() {
+    _autoSwipeTimer?.cancel();
     _pageController.dispose();
     _currentPageNotifier.dispose();
     super.dispose();
@@ -160,9 +176,10 @@ class _IntroScreenState extends State<IntroScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: const Text(
-                            'Get Started',
-                            style: TextStyle(
+                          child: Text(
+                            RemoteConfigService().introConfig?.buttonText ??
+                                'Get Started',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),

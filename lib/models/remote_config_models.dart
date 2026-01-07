@@ -87,11 +87,13 @@ class IntroConfig {
   final List<IntroItemConfig> items;
   final double titleSize;
   final Color titleColor;
+  final String buttonText;
 
   IntroConfig({
     required this.items,
     required this.titleSize,
     required this.titleColor,
+    required this.buttonText,
   });
 
   factory IntroConfig.fromJson(Map<String, dynamic> json) {
@@ -105,6 +107,7 @@ class IntroConfig {
       titleColor: RemoteConfigModels.parseColor(
         json['titleColor'] ?? '#000000',
       ),
+      buttonText: json['buttonText'] ?? 'Get Started',
     );
   }
 }

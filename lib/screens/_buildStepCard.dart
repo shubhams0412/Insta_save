@@ -19,31 +19,6 @@ class TutorialScreen extends StatelessWidget {
 
   const TutorialScreen({super.key, this.title = "How to Repost?", this.steps});
 
-  // Default steps (How to Repost)
-  static const List<TutorialStep> defaultSteps = [
-    TutorialStep(
-      step: "1",
-      instruction:
-          "Open Instagram and find the post, reel, or video you want to repost.",
-      icon: Icons.search_rounded,
-    ),
-    TutorialStep(
-      step: "2",
-      instruction: "Tap on the 'Share' (paper plane) button below the post.",
-      icon: Icons.send_rounded,
-    ),
-    TutorialStep(
-      step: "3",
-      instruction: "Tap on 'Copy Link' from the options menu.",
-      icon: Icons.link_rounded,
-    ),
-    TutorialStep(
-      step: "4",
-      instruction: "Return to this app. The post will appear automatically.",
-      icon: Icons.check_circle_rounded,
-    ),
-  ];
-
   // Specific steps for "Select Pics & Repost"
   static const List<TutorialStep> selectPicsSteps = [
     TutorialStep(
@@ -70,7 +45,7 @@ class TutorialScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displaySteps = steps ?? defaultSteps;
+    final displaySteps = steps ?? selectPicsSteps;
 
     return Scaffold(
       backgroundColor: Colors.white,
