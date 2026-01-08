@@ -90,7 +90,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.close, color: Colors.black),
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.grey),
             onPressed: () => Navigator.of(context).pop(),
           ),
           bottom: _isLoading

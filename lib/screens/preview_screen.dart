@@ -11,7 +11,12 @@ import 'package:insta_save/services/download_manager.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/widgets/status_dialog.dart';
 
+import 'package:insta_save/services/rating_service.dart';
+
 class PreviewScreen extends StatefulWidget {
+  // Static flag to prevent HomeScreen from triggering rating when PreviewScreen is active
+  static bool isProcessing = false;
+
   final List<Map<String, String>> mediaItems;
   final String username;
   final String caption;
@@ -57,6 +62,17 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
         if (!isStillDownloading && _isDialogOpen) {
           Navigator.of(context).pop(); // Auto-Pop
+          _isDialogOpen = false;
+
+          // 3. Trigger Rating AFTER Downling dialog close
+          // Small delay to ensure snackbars or pop animations finish if any
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+              RatingService().checkAndShowRating(
+                RatingService().mediaSaveCountKey,
+              );
+            }
+          });
         }
       });
     });
@@ -64,6 +80,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     // 2. Start Download & Show Dialog
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!DownloadManager.instance.isBatchDownloading(widget.postUrl)) {
+        PreviewScreen.isProcessing = true; // Set flag
         DownloadManager.instance.startBatchDownloads(
           widget.mediaItems,
           widget.username,
@@ -106,6 +123,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
           },
         ).then((result) {
           _isDialogOpen = false;
+          PreviewScreen.isProcessing = false; // Reset flag
           if (result is Map && result['home'] == true && mounted) {
             Navigator.of(context).pop(result);
           }
@@ -123,6 +141,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   @override
   void dispose() {
+    PreviewScreen.isProcessing = false; // Ensure flag is reset
     _downloadSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
@@ -460,6 +479,9 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
 
       _videoController!.setLooping(true);
       _videoController!.play();
+
+      // Force UI updates for play/pause state and ensure looping
+      _videoController!.addListener(_videoListener);
     } catch (error) {
       debugPrint("❌ Video initialization error: $error");
       if (mounted && !_isDisposed) {
@@ -470,8 +492,14 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
     }
   }
 
+  void _videoListener() {
+    if (!mounted || _isDisposed) return;
+    setState(() {});
+  }
+
   void _disposeVideo() {
     _isDisposed = true;
+    _videoController?.removeListener(_videoListener);
     _videoController?.pause();
     _videoController?.dispose();
     _videoController = null;

@@ -16,7 +16,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:insta_save/services/ad_service.dart'; // Import this
 import 'package:insta_save/services/rating_service.dart';
 import 'package:insta_save/services/notification_service.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:insta_save/utils/constants.dart';
 
 class RepostScreen extends StatefulWidget {
@@ -89,6 +88,7 @@ class _RepostScreenState extends State<RepostScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _captionController.dispose();
+    _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
     super.dispose();
   }
@@ -107,10 +107,9 @@ class _RepostScreenState extends State<RepostScreen>
     } else if (state == AppLifecycleState.resumed) {
       _videoController!.play();
 
-      // 6. On coming back from report (from Instagram app)
+      // Removed: Trigger at Step 1 instead of Step 6
       if (_didOpenInstagram) {
-        debugPrint("Returned from Instagram - Checking Rating Trigger");
-        RatingService().checkAndShowRating(null, always: true);
+        debugPrint("Returned from Instagram");
         _didOpenInstagram = false; // Reset
       }
     }
@@ -134,11 +133,17 @@ class _RepostScreenState extends State<RepostScreen>
           });
           _videoController!.setLooping(true);
           _videoController!.play();
+          _videoController!.addListener(_videoListener);
         }
       } catch (e) {
         debugPrint("Error initializing video: $e");
       }
     }
+  }
+
+  void _videoListener() {
+    if (!mounted || _videoController == null) return;
+    setState(() {});
   }
 
   Future<void> _loadImageAspectRatio() async {
@@ -363,10 +368,13 @@ class _RepostScreenState extends State<RepostScreen>
   // --- LOGIC: Handle Repost (Share Video Only) ---
 
   Future<void> _handleRepostAction() async {
-    // 5. On tapping "share" "repost" and "save" icon of share screen (everytime)
+    // 1. Taps on the repost -> rating review popup is displayed once
     await RatingService().checkAndShowRating(null, always: true);
-    // Set flag so we valid trigger 6 on return
+
+    // Set flag to track return (optional now but kept for state consistency)
     _didOpenInstagram = true;
+
+    // 2. Proceed to Preparing the post (FFmpeg/Image processing) / Ad flow
 
     // "Show an ad when reposting images at the 2nd, 4th, 6th, etc." (Even occurrences)
     AdService().handleRepostAd(() async {
@@ -571,11 +579,13 @@ class _RepostScreenState extends State<RepostScreen>
                 width: 24,
                 height: 24,
               ),
-              onPressed: () async {
-                // 4. On tapping "home" icon of share screen (everytime)
-                await RatingService().checkAndShowRating(null, always: true);
-
-                Navigator.of(context).pop({'home': true, 'tab': targetTab});
+              onPressed: () {
+                // Return to home and signal to show rating
+                Navigator.of(context).pop({
+                  'home': true,
+                  'tab': targetTab,
+                  'rating': true,
+                });
               },
             ),
         ],
@@ -937,18 +947,19 @@ class _RepostScreenState extends State<RepostScreen>
               onTap: () async {
                 if (widget.showDeleteButton) {
                   // Entry from Collection (Home Screen Tab Bar): Show Toast
-                  Fluttertoast.showToast(
-                    msg: "The post already in your collection",
-                    toastLength: Toast.LENGTH_SHORT,
-                    gravity: ToastGravity.BOTTOM,
-                    backgroundColor: Colors.black87,
-                    textColor: Colors.white,
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Already saved to your In-App Collection"),
+                      duration: Duration(seconds: 2),
+                    ),
                   );
                 } else {
                   // Entry from New Download: Show Notification
-                  await NotificationService().showNotification(
-                    title: Constants.AppName,
-                    body: "Post saved in to your collection",
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Saved to your In-App Collection"),
+                      duration: Duration(seconds: 2),
+                    ),
                   );
                 }
 

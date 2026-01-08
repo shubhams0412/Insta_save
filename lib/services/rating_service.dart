@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:insta_save/main.dart'; // To access navigatorKey
+import 'package:insta_save/widgets/rating_dialog.dart';
 
 class RatingService {
   static final RatingService _instance = RatingService._internal();
@@ -13,6 +14,7 @@ class RatingService {
   RatingService._internal();
 
   final InAppReview _inAppReview = InAppReview.instance;
+  bool _isShowing = false;
 
   // Keys for counters
   static const String _settingsReturnCountKey = 'rating_settings_return_count';
@@ -43,19 +45,26 @@ class RatingService {
   }
 
   Future<void> _showReview() async {
+    if (_isShowing) return;
     try {
-      if (await _inAppReview.isAvailable()) {
-        await _inAppReview.requestReview();
-      }
-      // Toast to user as feedback/confirmation (per request)
-      Fluttertoast.showToast(
-        msg: "Please rate us on Play Store",
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.black87,
-        textColor: Colors.white,
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+
+      _isShowing = true;
+      await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => const RatingDialog(),
       );
+      _isShowing = false;
+
+      // We still attempt standard review in background or after custom dialog if needed,
+      // but for now, the custom dialog is the primary UI.
+      if (await _inAppReview.isAvailable()) {
+        // Option: only show standard review if they gave 4+ stars in custom dialog
+      }
     } catch (e) {
+      _isShowing = false;
       debugPrint("Error showing rating: $e");
     }
   }

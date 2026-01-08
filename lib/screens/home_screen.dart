@@ -99,11 +99,7 @@ class _HomeScreenState extends State<HomeScreen>
     _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((
       _,
     ) async {
-      debugPrint("Download Completed - Checking Rating Trigger");
-      // 3. On success import of each media save "every 1st, 3rd, 5th, and so on"
-      await RatingService().checkAndShowRating(
-        RatingService().mediaSaveCountKey,
-      );
+      debugPrint("Download Completed - Refreshing Gallery");
       _refreshGalleryDataSilently();
     });
 
@@ -875,6 +871,14 @@ class _HomeScreenState extends State<HomeScreen>
                 if (mounted && result.containsKey('tab')) {
                   _tabController.animateTo(result['tab'] as int);
                 }
+
+                if (result['rating'] == true) {
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      RatingService().checkAndShowRating(null, always: true);
+                    }
+                  });
+                }
               }
               // Reload silently regardless of deletion for consistency
               _refreshGalleryDataSilently();
@@ -1062,7 +1066,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void pasteInstagramLink() async {
     final data = await Clipboard.getData('text/plain');
-    if (data != null && data.text != null) {
+    if (data != null && data.text != null && data.text!.isNotEmpty) {
       if (data.text!.contains("instagram.com/")) {
         _linkController.text = data.text!;
       } else {
@@ -1072,6 +1076,14 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         );
       }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "There’s nothing to paste. Please copy a valid link and try again.",
+          ),
+        ),
+      );
     }
   }
 
@@ -1163,9 +1175,12 @@ class _HomeScreenState extends State<HomeScreen>
                 }
               },
             );
-            return StatusDialog(
-              type: DialogType.fetching,
-              progress: fakeProgress,
+            return PopScope(
+              canPop: false,
+              child: StatusDialog(
+                type: DialogType.fetching,
+                progress: fakeProgress,
+              ),
             );
           },
         );
@@ -1237,6 +1252,14 @@ class _HomeScreenState extends State<HomeScreen>
                 if (result is Map && result['home'] == true) {
                   if (mounted && result.containsKey('tab')) {
                     _tabController.animateTo(result['tab'] as int);
+                  }
+
+                  if (result['rating'] == true) {
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      if (mounted) {
+                        RatingService().checkAndShowRating(null, always: true);
+                      }
+                    });
                   }
                 }
                 _refreshGalleryDataSilently();

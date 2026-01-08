@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/services/notification_service.dart';
 import 'package:insta_save/utils/constants.dart';
 
 class DownloadTask {
@@ -146,6 +147,18 @@ class DownloadManager extends ChangeNotifier {
     // 5. Remove from active list
     _activeTasks.remove(task);
     notifyListeners();
+
+    // 6. 🔥 Fire Notification if entire batch is complete
+    final isAnyStillDownloading = _activeTasks.any(
+      (t) => t.postUrl == task.postUrl && !t.isCompleted.value,
+    );
+    if (!isAnyStillDownloading) {
+      NotificationService().showNotification(
+        id: task.postUrl.hashCode,
+        title: "Preview Ready!",
+        body: "Your media preview is now ready to view",
+      );
+    }
   }
 
   // Mutex Lock for saving to history

@@ -97,7 +97,7 @@ class SettingsScreen extends StatelessWidget {
                         '📲 Share ${Constants.AppName} with Friends!\n\n'
                         'Love saving Reels, Stories & Posts?\n'
                         'Share ${Constants.AppName} and let your friends get their favorite social content too!\n'
-                        '🔗 ${Constants.App_Store_URL}',
+                        '🔗 ${Constants.Play_Store_URL}',
                       );
                     },
                   ),
