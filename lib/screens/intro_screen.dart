@@ -26,11 +26,11 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   void _startAutoSwipe() {
-    _autoSwipeTimer = Timer(const Duration(seconds: 3), () {
+    _autoSwipeTimer = Timer(const Duration(seconds: 4), () {
       if (_pageController.hasClients && _pageController.page == 0) {
         _pageController.animateToPage(
           1,
-          duration: const Duration(milliseconds: 500),
+          duration: const Duration(milliseconds: 600),
           curve: Curves.easeInOut,
         );
       }
@@ -52,12 +52,10 @@ class _IntroScreenState extends State<IntroScreen> {
     IntroItem(
       image: 'assets/images/intro_01.png',
       title: "Grab Reels, Stories &\nPosts in just one tap",
-      rotation: 0.0,
     ),
     IntroItem(
       image: 'assets/images/intro_02.png',
-      title: "Repost Your Favorite\nMoments – Instantly!",
-      rotation: 0.1, // Slight rotation for the second image
+      title: "Repost Your Favorite\nInstagram Posts!",
     ),
   ];
 
@@ -77,7 +75,7 @@ class _IntroScreenState extends State<IntroScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. Background Gradient
+          // 1. Background Gradient & Decorative Circles
           _buildBackground(),
 
           // 2. Main Content
@@ -86,47 +84,35 @@ class _IntroScreenState extends State<IntroScreen> {
               children: [
                 // --- SWIPEABLE CARDS ---
                 Expanded(
-                  flex: 5,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 20.0),
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: _items.length,
-                      onPageChanged: (int page) {
-                        // Update the notifier without rebuilding the whole Scaffold
-                        _currentPageNotifier.value = page;
-                      },
-                      itemBuilder: (context, index) {
-                        return _IntroCard(
-                          imagePath: _items[index].image,
-                          rotationAngle: _items[index].rotation,
-                        );
-                      },
-                    ),
+                  flex: 6,
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: _items.length,
+                    onPageChanged: (int page) {
+                      _currentPageNotifier.value = page;
+                    },
+                    itemBuilder: (context, index) {
+                      return _IntroCard(
+                        imagePath: _items[index].image,
+                      );
+                    },
                   ),
-                ),
-
-                // Responsive spacing between image and bottom section
-                SizedBox(
-                  height: MediaQuery.of(context).size.height < 700 ? 16 : 24,
                 ),
 
                 // --- BOTTOM SECTION ---
                 Expanded(
-                  flex: 3,
+                  flex: 4,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24.0,
-                      vertical: 20.0,
                     ),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Dynamic Title (Listens to page changes)
                         ValueListenableBuilder<int>(
                           valueListenable: _currentPageNotifier,
                           builder: (context, pageIndex, child) {
-                            // Fetch from config if available, else fallback to hardcoded defaults
                             final config = RemoteConfigService().introConfig;
                             String title = _items[pageIndex].title;
                             if (config != null &&
@@ -139,49 +125,57 @@ class _IntroScreenState extends State<IntroScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: config?.titleColor ?? Colors.black,
-                                fontSize: config?.titleSize ?? 24,
+                                fontSize: config?.titleSize ?? 28,
                                 fontWeight: FontWeight.bold,
-                                height: 1.2,
+                                height: 1.1,
+                                letterSpacing: -0.5,
                               ),
                             );
                           },
                         ),
-
-                        const Spacer(),
+                        
+                        const SizedBox(height: 20),
 
                         // Dots
                         SmoothPageIndicator(
                           controller: _pageController,
                           count: _items.length,
-                          effect: const WormEffect(
-                            dotColor: Colors.black26,
+                          effect: const ScrollingDotsEffect(
+                            dotColor: Color(0xFFD1D1D1),
                             activeDotColor: Colors.black,
-                            dotHeight: 10,
-                            dotWidth: 10,
-                            spacing: 16,
+                            dotHeight: 8,
+                            dotWidth: 8,
+                            spacing: 8,
+                            activeDotScale: 1.2,
                           ),
                         ),
 
-                        const SizedBox(height: 32),
+                        const Spacer(),
 
                         // Button
-                        ElevatedButton(
-                          onPressed: navigateToReviewsScreen,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(double.infinity, 56),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 30.0),
+                          child: ElevatedButton(
+                            onPressed: navigateToReviewsScreen,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(220, 56),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            RemoteConfigService().introConfig?.buttonText ??
-                                'Get Started',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: Text(
+                                RemoteConfigService().introConfig?.buttonText ??
+                                    'Get Started',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -198,30 +192,34 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFE1BEE7), // Purple
-            Color(0xFFBBDEFB), // Blue
-          ],
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFFDEBFF), // Very soft purple
+                Color(0xFFE3F2FD), // Very soft blue
+              ],
+            ),
+          ),
         ),
-      ),
+        // Decorative Circles (Matching mockup)
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _BackgroundCirclePainter(),
+          ),
+        ),
+      ],
     );
   }
 
   Future<void> navigateToReviewsScreen() async {
-    // 1. Show Rating "everytime" as per requirement
     await RatingService().checkAndShowRating(null, always: true);
 
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isIntroSeen'},
-      ),
-    );
-    // Save preference
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isIntroSeen', true);
 
     if (mounted) {
@@ -233,31 +231,50 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 }
 
+class _BackgroundCirclePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withAlpha(80)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    // Draw concentric circles near the middle/top where cards are
+    final center = Offset(size.width / 2, size.height * 0.45);
+    
+    canvas.drawCircle(center, size.width * 0.4, paint);
+    canvas.drawCircle(center, size.width * 0.6, paint);
+    canvas.drawCircle(center, size.width * 0.8, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 // --- HELPER CLASSES ---
 
 class IntroItem {
   final String image;
   final String title;
-  final double rotation;
 
-  IntroItem({required this.image, required this.title, this.rotation = 0.0});
+  IntroItem({required this.image, required this.title});
 }
 
 class _IntroCard extends StatelessWidget {
   final String imagePath;
-  final double rotationAngle;
 
-  const _IntroCard({required this.imagePath, this.rotationAngle = 0});
+  const _IntroCard({required this.imagePath});
 
   @override
   Widget build(BuildContext context) {
-    return Transform.rotate(
-      angle: rotationAngle,
+    return Container(
+      width: double.infinity,
+      alignment: Alignment.center,
       child: Image.asset(
         imagePath,
-        fit: BoxFit.fitWidth,
-        width: double.infinity,
-        alignment: Alignment.topCenter,
+        fit: BoxFit.contain,
+        // Using a fraction of screen width to ensure it looks like a floating card
+        width: MediaQuery.of(context).size.width * 0.9, 
       ),
     );
   }
