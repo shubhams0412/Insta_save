@@ -84,7 +84,7 @@ class _IntroScreenState extends State<IntroScreen> {
               children: [
                 // --- SWIPEABLE CARDS ---
                 Expanded(
-                  flex: 6,
+                  flex: 7,
                   child: PageView.builder(
                     controller: _pageController,
                     itemCount: _items.length,
@@ -101,7 +101,7 @@ class _IntroScreenState extends State<IntroScreen> {
 
                 // --- BOTTOM SECTION ---
                 Expanded(
-                  flex: 4,
+                  flex: 3,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24.0,
@@ -200,18 +200,13 @@ class _IntroScreenState extends State<IntroScreen> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFFFDEBFF), // Very soft purple
-                Color(0xFFE3F2FD), // Very soft blue
+                Color(0x25BB2ECF), // Very soft purple
+                Color(0x204F8FFA), // Very soft blue
               ],
             ),
           ),
         ),
         // Decorative Circles (Matching mockup)
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _BackgroundCirclePainter(),
-          ),
-        ),
       ],
     );
   }
@@ -231,27 +226,6 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 }
 
-class _BackgroundCirclePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withAlpha(80)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-
-    // Draw concentric circles near the middle/top where cards are
-    final center = Offset(size.width / 2, size.height * 0.45);
-    
-    canvas.drawCircle(center, size.width * 0.4, paint);
-    canvas.drawCircle(center, size.width * 0.6, paint);
-    canvas.drawCircle(center, size.width * 0.8, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// --- HELPER CLASSES ---
 
 class IntroItem {
   final String image;
@@ -267,14 +241,13 @@ class _IntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      alignment: Alignment.center,
+    return SizedBox(
+      width: MediaQuery.of(context).size.width,
+      height: double.infinity,
       child: Image.asset(
         imagePath,
-        fit: BoxFit.contain,
-        // Using a fraction of screen width to ensure it looks like a floating card
-        width: MediaQuery.of(context).size.width * 0.9, 
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
       ),
     );
   }
