@@ -219,11 +219,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   // --- ACTIONS ---
 
   Future<void> navigateToHomeScreen() async {
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isRatingSeen'},
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
 
     // Save flag
     await prefs.setBool('isRatingSeen', true);

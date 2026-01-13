@@ -4,11 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 // --- Function to call to show the tutorial dialog ---
 Future<void> showTutorialDialog(BuildContext context) async {
-  final prefs = await SharedPreferencesWithCache.create(
-    cacheOptions: const SharedPreferencesWithCacheOptions(
-      allowList: <String>{'dontShowTutorialAgain'},
-    ),
-  );
+  final prefs = await SharedPreferences.getInstance();
   final bool dontShowAgain = prefs.getBool('dontShowTutorialAgain') ?? false;
 
   if (dontShowAgain) {
@@ -92,8 +88,11 @@ class _TutorialDialogState extends State<TutorialDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate responsive height (Max 65% of screen, Min 500px)
-    final height = MediaQuery.of(context).size.height * 0.65;
+    // Calculate responsive height with constraints to prevent excessive size on tall devices
+    final height = (MediaQuery.of(context).size.height * 0.65).clamp(
+      450.0,
+      600.0,
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -232,11 +231,7 @@ class _TutorialDialogState extends State<TutorialDialog> {
         ElevatedButton(
           onPressed: () async {
             if (_dontShowAgain) {
-              final prefs = await SharedPreferencesWithCache.create(
-                cacheOptions: const SharedPreferencesWithCacheOptions(
-                  allowList: <String>{'dontShowTutorialAgain'},
-                ),
-              );
+              final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('dontShowTutorialAgain', true);
             }
             if (mounted) {

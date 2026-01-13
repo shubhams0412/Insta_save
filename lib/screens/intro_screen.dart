@@ -92,9 +92,7 @@ class _IntroScreenState extends State<IntroScreen> {
                       _currentPageNotifier.value = page;
                     },
                     itemBuilder: (context, index) {
-                      return _IntroCard(
-                        imagePath: _items[index].image,
-                      );
+                      return _IntroCard(imagePath: _items[index].image);
                     },
                   ),
                 ),
@@ -103,9 +101,7 @@ class _IntroScreenState extends State<IntroScreen> {
                 Expanded(
                   flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24.0,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -133,7 +129,7 @@ class _IntroScreenState extends State<IntroScreen> {
                             );
                           },
                         ),
-                        
+
                         const SizedBox(height: 20),
 
                         // Dots
@@ -167,7 +163,9 @@ class _IntroScreenState extends State<IntroScreen> {
                               ),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24.0,
+                              ),
                               child: Text(
                                 RemoteConfigService().introConfig?.buttonText ??
                                     'Get Started',
@@ -212,8 +210,6 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> navigateToReviewsScreen() async {
-    await RatingService().checkAndShowRating(null, always: true);
-
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isIntroSeen', true);
 
@@ -223,9 +219,10 @@ class _IntroScreenState extends State<IntroScreen> {
         MaterialPageRoute(builder: (context) => const ReviewsScreen()),
       );
     }
+    // Show custom rating dialog every time on review screen
+    await RatingService().showCustomRating(null, always: true);
   }
 }
-
 
 class IntroItem {
   final String image;

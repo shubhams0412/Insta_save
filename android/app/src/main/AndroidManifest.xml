@@ -12,6 +12,9 @@
     <!-- ✅ Required for Firebase & API calls in Release Mode -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <uses-permission android:name="com.android.vending.BILLING"/>
+
+
     <application
             android:label="insta_save"
             android:name="${applicationName}"

@@ -115,11 +115,7 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     setState(() => _isDeleting = true);
 
     try {
-      final prefs = await SharedPreferencesWithCache.create(
-        cacheOptions: const SharedPreferencesWithCacheOptions(
-          allowList: <String>{'savedPosts'},
-        ),
-      );
+      final prefs = await SharedPreferences.getInstance();
       final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
 
       // 1. Filter and Delete in one pass

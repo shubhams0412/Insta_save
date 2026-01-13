@@ -14,8 +14,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:insta_save/services/ad_service.dart'; // Import this
-import 'package:insta_save/services/rating_service.dart';
-import 'package:insta_save/services/notification_service.dart';
 import 'package:insta_save/utils/constants.dart';
 
 class RepostScreen extends StatefulWidget {
@@ -107,10 +105,19 @@ class _RepostScreenState extends State<RepostScreen>
     } else if (state == AppLifecycleState.resumed) {
       _videoController!.play();
 
-      // Removed: Trigger at Step 1 instead of Step 6
-      if (_didOpenInstagram) {
-        debugPrint("Returned from Instagram");
+      // Navigate to HomeScreen when returning from Instagram
+      if (_didOpenInstagram && mounted) {
+        debugPrint("Returned from Instagram - Navigating to HomeScreen");
         _didOpenInstagram = false; // Reset
+
+        // Determine target tab
+        int targetTab = _isVideo ? 1 : 0;
+        if (widget.postUrl == "device_media") {
+          targetTab = 2;
+        }
+
+        // Navigate to HomeScreen
+        Navigator.of(context).pop({'home': true, 'tab': targetTab});
       }
     }
   }
@@ -368,13 +375,10 @@ class _RepostScreenState extends State<RepostScreen>
   // --- LOGIC: Handle Repost (Share Video Only) ---
 
   Future<void> _handleRepostAction() async {
-    // 1. Taps on the repost -> rating review popup is displayed once
-    await RatingService().checkAndShowRating(null, always: true);
-
     // Set flag to track return (optional now but kept for state consistency)
     _didOpenInstagram = true;
 
-    // 2. Proceed to Preparing the post (FFmpeg/Image processing) / Ad flow
+    // Proceed to Preparing the post (FFmpeg/Image processing) / Ad flow
 
     // "Show an ad when reposting images at the 2nd, 4th, 6th, etc." (Even occurrences)
     AdService().handleRepostAd(() async {
@@ -408,6 +412,7 @@ class _RepostScreenState extends State<RepostScreen>
             'uri': uriString,
             'mediaType': mediaType,
           });
+          // Navigation will happen in didChangeAppLifecycleState when user returns from Instagram
         }
       } on PlatformException catch (e) {
         debugPrint("Native Error: ${e.message}");
@@ -503,11 +508,7 @@ class _RepostScreenState extends State<RepostScreen>
     }
 
     try {
-      final prefs = await SharedPreferencesWithCache.create(
-        cacheOptions: const SharedPreferencesWithCacheOptions(
-          allowList: <String>{'savedPosts'},
-        ),
-      );
+      final prefs = await SharedPreferences.getInstance();
       final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
       savedData.removeWhere((item) {
         final Map<String, dynamic> decoded = jsonDecode(item);
@@ -581,11 +582,9 @@ class _RepostScreenState extends State<RepostScreen>
               ),
               onPressed: () {
                 // Return to home and signal to show rating
-                Navigator.of(context).pop({
-                  'home': true,
-                  'tab': targetTab,
-                  'rating': true,
-                });
+                Navigator.of(
+                  context,
+                ).pop({'home': true, 'tab': targetTab, 'rating': true});
               },
             ),
         ],
@@ -955,7 +954,7 @@ class _RepostScreenState extends State<RepostScreen>
                   );
                 } else {
                   // Entry from New Download: Show Notification
-                   ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Saved to your In-App Collection"),
                       duration: Duration(seconds: 2),
@@ -964,7 +963,15 @@ class _RepostScreenState extends State<RepostScreen>
                 }
 
                 if (mounted) {
-                  Navigator.of(context).pop({'home': true, 'tab': targetTab});
+                  // Check if this is from "Select Pics & Repost" flow
+                  final bool isDeviceMedia = widget.postUrl == "device_media";
+
+                  Navigator.of(context).pop({
+                    'home': true,
+                    'tab': targetTab,
+                    'rating':
+                        isDeviceMedia, // Trigger rating for device media saves
+                  });
                 }
               },
               child: Container(
@@ -974,17 +981,20 @@ class _RepostScreenState extends State<RepostScreen>
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.black, width: 1),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.download_rounded, color: Colors.black, size: 22),
-                    SizedBox(width: 8),
-                    Text(
-                      "Save",
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
+                    SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        "Save to Collection",
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

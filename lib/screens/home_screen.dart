@@ -8,13 +8,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:insta_save/services/ad_service.dart'; // Import this
+import 'package:insta_save/services/ad_service.dart';
 import 'package:insta_save/services/rating_service.dart';
 import 'package:insta_save/services/notification_service.dart';
+import 'package:insta_save/services/iap_service.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import 'package:insta_save/screens/all_media_screen.dart';
 import 'package:insta_save/screens/edit_post_screen.dart';
@@ -27,6 +28,7 @@ import 'package:insta_save/services/saved_post.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/screens/sales_screen.dart';
 import 'package:insta_save/utils/constants.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/instagram_login_webview.dart';
 import '../widgets/status_dialog.dart';
@@ -53,7 +55,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   List<Map<String, dynamic>>? _separatedMedia;
   bool _isLoadingMedia = true;
-  bool _isLoggedIn = false;
+  bool _isLoggedIn = true;
+  bool _isOpeningGallery = false;
 
   static const String _apiBaseUrl = kReleaseMode
       ? "https://api.instasave.turbofast.io/" // TODO: Replace with actual release URL
@@ -114,11 +117,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _requestNotificationPermission() async {
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isNotificationPermissionAsked'},
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
     bool alreadyAsked = prefs.getBool('isNotificationPermissionAsked') ?? false;
 
     if (!alreadyAsked) {
@@ -128,11 +127,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _checkLoginStatus() async {
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isInstagramLoggedIn'},
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
         _isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
@@ -221,15 +216,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _refreshGalleryDataSilently() async {
     // 1. Fetch raw data from Prefs
-    // 1. Initialize with an allowList (more performant and ProGuard friendly)
-    final SharedPreferencesWithCache prefs =
-        await SharedPreferencesWithCache.create(
-          cacheOptions: const SharedPreferencesWithCacheOptions(
-            allowList: <String>{
-              'savedPosts',
-            }, // List all keys you intend to use
-          ),
-        );
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     // 2. Fetch data directly from the cache (Synchronous after initialization)
     final List<String> savedData = prefs.getStringList('savedPosts') ?? [];
@@ -300,7 +287,16 @@ class _HomeScreenState extends State<HomeScreen>
                 Expanded(child: _buildMediaTabsSection()),
 
                 // Space for PRO card
-                const SizedBox(height: 90),
+                ValueListenableBuilder<bool>(
+                  valueListenable: IAPService().isPremium,
+                  builder: (context, isPremium, child) {
+                    // Hide spacing if user is premium
+                    if (isPremium) {
+                      return const SizedBox.shrink();
+                    }
+                    return const SizedBox(height: 90);
+                  },
+                ),
               ],
             ),
 
@@ -328,13 +324,23 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ),
       actions: [
-        IconButton(
-          icon: Image.asset(
-            'assets/images/ads.png',
-            width: 24,
-            height: 24,
-          ), // Placeholder for "No Ads"
-          onPressed: navigateToSalesPage,
+        ValueListenableBuilder<bool>(
+          valueListenable: IAPService().isPremium,
+          builder: (context, isPremium, child) {
+            // Hide the ads icon if user is premium
+            if (isPremium) {
+              return const SizedBox.shrink();
+            }
+
+            return IconButton(
+              icon: Image.asset(
+                'assets/images/ads.png',
+                width: 24,
+                height: 24,
+              ), // Placeholder for "No Ads"
+              onPressed: navigateToSalesPage,
+            );
+          },
         ),
         IconButton(
           icon: Image.asset(
@@ -875,7 +881,10 @@ class _HomeScreenState extends State<HomeScreen>
                 if (result['rating'] == true) {
                   Future.delayed(const Duration(milliseconds: 500), () {
                     if (mounted) {
-                      RatingService().checkAndShowRating(null, always: true);
+                      // Show custom rating on 1st, 5th, 9th... for Select Pics & Repost flow
+                      RatingService().showCustomRating(
+                        RatingService().selectPicsSaveCountKey,
+                      );
                     }
                   });
                 }
@@ -966,100 +975,305 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildProCard() {
     final homeConfig = RemoteConfigService().homeConfig;
 
-    return GestureDetector(
-      onTap: navigateToSalesPage,
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF9500), Color(0xFFFF4B2B)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(51),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Image.asset(
-                    'assets/images/crown.png',
-                    width: 32,
-                    height: 32,
-                    color: Colors.white,
+    return ValueListenableBuilder<bool>(
+      valueListenable: IAPService().isPremium,
+      builder: (context, isPremium, child) {
+        // Hide the pro card if user is premium
+        if (isPremium) {
+          return const SizedBox.shrink();
+        }
+
+        return GestureDetector(
+          onTap: navigateToSalesPage,
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF9500), Color(0xFFFF4B2B)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(51),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Image.asset(
+                        'assets/images/crown.png',
+                        width: 32,
+                        height: 32,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      homeConfig?.proCardTitle ?? "Upgrade to PRO",
-                      style: TextStyle(
-                        color: homeConfig?.proCardTitleColor ?? Colors.white,
-                        fontSize: homeConfig?.proCardTitleSize ?? 20,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          homeConfig?.proCardTitle ?? "Upgrade to PRO",
+                          style: TextStyle(
+                            color:
+                                homeConfig?.proCardTitleColor ?? Colors.white,
+                            fontSize: homeConfig?.proCardTitleSize ?? 20,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          homeConfig?.proCardSubtitle ??
+                              "Unlock unlimited downloads",
+                          style: TextStyle(
+                            color:
+                                homeConfig?.proCardSubtitleColor ??
+                                Colors.white,
+                            fontSize: homeConfig?.proCardSubtitleSize ?? 16,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      homeConfig?.proCardSubtitle ??
-                          "Unlock unlimited downloads",
-                      style: TextStyle(
-                        color: homeConfig?.proCardSubtitleColor ?? Colors.white,
-                        fontSize: homeConfig?.proCardSubtitleSize ?? 16,
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ],
               ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white,
-                size: 20,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   // --- ACTIONS ---
-
   Future<void> pickImageFromGallery() async {
-    // Wrap with Ad Logic: "Select Pics & Repost" (Odd occurrences)
-    AdService().handleSelectPicsAd(() async {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (_isOpeningGallery) return;
+    setState(() => _isOpeningGallery = true);
 
-      if (image != null && mounted) {
-        FocusManager.instance.primaryFocus?.unfocus();
-        Navigator.push(
-          context,
-          createSlideRoute(
-            EditPostScreen(imagePath: image.path),
-            direction: SlideFrom.bottom,
+    AdService().handleSelectPicsAd(() async {
+      try {
+        final permission = await PhotoManager.requestPermissionExtend();
+        if (!permission.isAuth) return;
+
+        final albums = await PhotoManager.getAssetPathList(
+          type: RequestType.common,
+          filterOption: FilterOptionGroup(
+            orders: [
+              const OrderOption(type: OrderOptionType.createDate, asc: false),
+            ],
           ),
-        ).then((result) {
-          if (result is Map && result['home'] == true) {
-            if (mounted && result.containsKey('tab')) {
-              _tabController.animateTo(result['tab'] as int);
-            }
-          }
-          _refreshGalleryDataSilently();
-        });
+        );
+        AssetPathEntity selectedAlbum = albums.first;
+
+        List<AssetEntity> assets = await selectedAlbum.getAssetListRange(
+          start: 0,
+          end: 1000000,
+        );
+
+        if (!mounted) return;
+
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) {
+            return SizedBox(
+              height: MediaQuery.of(context).size.height * 0.65,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      // Drag Handle
+                      Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      /// Album Dropdown
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<AssetPathEntity>(
+                            value: selectedAlbum,
+                            icon: const Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.black,
+                            ),
+                            dropdownColor: Colors.white,
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            items: albums.map((e) {
+                              return DropdownMenuItem(
+                                value: e,
+                                child: Text(e.name),
+                              );
+                            }).toList(),
+                            onChanged: (val) async {
+                              if (val == null) return;
+                              selectedAlbum = val;
+                              assets = await selectedAlbum.getAssetListRange(
+                                start: 0,
+                                end: 1000000,
+                              );
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Expanded(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.all(2),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 2,
+                                mainAxisSpacing: 2,
+                              ),
+                          itemCount: assets.length + 1,
+                          itemBuilder: (_, i) {
+                            /// Camera Button
+                            if (i == 0) {
+                              return GestureDetector(
+                                onTap: () async {
+                                  final XFile? file = await ImagePicker()
+                                      .pickImage(source: ImageSource.camera);
+
+                                  if (file != null && mounted) {
+                                    Navigator.pop(context);
+                                    _openEditor(file.path);
+                                  }
+                                },
+                                child: Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.black54,
+                                    size: 30,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final asset = assets[i - 1];
+
+                            return FutureBuilder<Uint8List?>(
+                              future: asset.thumbnailDataWithSize(
+                                const ThumbnailSize(300, 300),
+                              ),
+                              builder: (_, snap) {
+                                if (!snap.hasData) {
+                                  return Container(color: Colors.grey[100]);
+                                }
+
+                                return GestureDetector(
+                                  onTap: () async {
+                                    final file = await asset.file;
+                                    if (file == null) return;
+
+                                    Navigator.pop(context);
+                                    _openEditor(file.path);
+                                  },
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.memory(
+                                        snap.data!,
+                                        fit: BoxFit.cover,
+                                      ),
+
+                                      /// Video Overlay
+                                      if (asset.type == AssetType.video)
+                                        Align(
+                                          alignment: Alignment.bottomRight,
+                                          child: Container(
+                                            margin: const EdgeInsets.all(4),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withOpacity(
+                                                0.7,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              _formatDuration(
+                                                asset.videoDuration,
+                                              ),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
+        );
+      } finally {
+        if (mounted) setState(() => _isOpeningGallery = false);
+      }
+    });
+  }
+
+  void _openEditor(String path) {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => EditPostScreen(imagePath: path)),
+    ).then((result) {
+      _refreshGalleryDataSilently();
+      if (result is Map && result['rating'] == true) {
+        RatingService().showCustomRating(
+          RatingService().selectPicsSaveCountKey,
+        );
       }
     });
   }
@@ -1123,11 +1337,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (isLoginFlowEnabled) {
       // Original behavior: Check login status and show login if needed
-      final prefs = await SharedPreferencesWithCache.create(
-        cacheOptions: const SharedPreferencesWithCacheOptions(
-          allowList: <String>{'isInstagramLoggedIn'},
-        ),
-      );
+      final prefs = await SharedPreferences.getInstance();
       bool isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
 
       if (!isLoggedIn) {
@@ -1257,7 +1467,10 @@ class _HomeScreenState extends State<HomeScreen>
                   if (result['rating'] == true) {
                     Future.delayed(const Duration(milliseconds: 500), () {
                       if (mounted) {
-                        RatingService().checkAndShowRating(null, always: true);
+                        // Show native rating on 1st, 5th, 9th... when tapping Home from Repost
+                        RatingService().showNativeRating(
+                          RatingService().repostGoHomeCountKey,
+                        );
                       }
                     });
                   }
@@ -1405,5 +1618,9 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
     return separated;
+  }
+
+  String _formatDuration(Duration d) {
+    return "${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
   }
 }

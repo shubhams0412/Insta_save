@@ -9,6 +9,7 @@ import 'package:insta_save/screens/intro_screen.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/services/ad_service.dart';
 import 'package:insta_save/services/notification_service.dart';
+import 'package:insta_save/services/iap_service.dart';
 import 'package:insta_save/utils/constants.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -21,6 +22,9 @@ Future<void> main() async {
 
   // Initialize Notification Service
   await NotificationService().init();
+
+  // Initialize IAP Service
+  await IAPService().initialize();
 
   // 1. Lock Orientation to Portrait (Optional but recommended for this type of app)
   await SystemChrome.setPreferredOrientations([
@@ -48,15 +52,11 @@ Future<void> main() async {
     // Load the first ad immediately so it's ready
     await AdService().loadAppOpenAd();
 
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isIntroSeen', 'isRatingSeen'},
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
     isIntroSeen = prefs.getBool('isIntroSeen') ?? false;
     isRatingSeen = prefs.getBool('isRatingSeen') ?? false;
   } catch (e) {
-    print("Initialization error: $e");
+    debugPrint("Initialization error: $e");
   }
 
   runApp(MyApp(isIntroSeen: isIntroSeen, isRatingSeen: isRatingSeen));

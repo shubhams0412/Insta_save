@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import 'package:insta_save/screens/repost_screen.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/saved_post.dart';
@@ -20,12 +21,41 @@ class _EditPostScreenState extends State<EditPostScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _captionController = TextEditingController();
   bool _isSaving = false;
+  bool _isVideo = false;
+  VideoPlayerController? _videoController;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfVideo();
+  }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _captionController.dispose();
+    _videoController?.dispose();
     super.dispose();
+  }
+
+  void _checkIfVideo() async {
+    final path = widget.imagePath.toLowerCase();
+    if (path.endsWith('.mp4') ||
+        path.endsWith('.mov') ||
+        path.endsWith('.avi')) {
+      setState(() => _isVideo = true);
+      _videoController = VideoPlayerController.file(File(widget.imagePath));
+      try {
+        await _videoController!.initialize();
+        if (mounted) {
+          setState(() {});
+          _videoController!.setLooping(true);
+          _videoController!.play();
+        }
+      } catch (e) {
+        debugPrint('Error initializing video: $e');
+      }
+    }
   }
 
   // --- LOGIC ---
@@ -95,11 +125,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
   }
 
   Future<void> _savePostToLocal(SavedPost post) async {
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'savedPosts'},
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getStringList('savedPosts') ?? [];
 
     // Remove duplicates based on path
@@ -196,17 +222,75 @@ class _EditPostScreenState extends State<EditPostScreen> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Image.file(
-          File(widget.imagePath),
-          fit: BoxFit.cover,
-          width: double.infinity,
-          errorBuilder: (_, __, ___) => Container(
-            height: 200,
-            color: Colors.grey.shade200,
-            child: const Center(
-              child: Icon(Icons.broken_image, color: Colors.grey),
+        child: _isVideo ? _buildVideoPreview() : _buildImageWidget(),
+      ),
+    );
+  }
+
+  Widget _buildVideoPreview() {
+    if (_videoController == null || !_videoController!.value.isInitialized) {
+      return Container(
+        height: 200,
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: _videoController!.value.aspectRatio,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          VideoPlayer(_videoController!),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                if (_videoController!.value.isPlaying) {
+                  _videoController!.pause();
+                } else {
+                  _videoController!.play();
+                }
+              });
+            },
+            child: Container(
+              color: Colors.transparent,
+              child: Center(
+                child: AnimatedOpacity(
+                  opacity: _videoController!.value.isPlaying ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageWidget() {
+    return Image.file(
+      File(widget.imagePath),
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (_, __, ___) => Container(
+        height: 200,
+        color: Colors.grey.shade200,
+        child: const Center(
+          child: Icon(Icons.broken_image, color: Colors.grey),
         ),
       ),
     );

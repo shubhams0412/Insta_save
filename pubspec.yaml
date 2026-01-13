@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ^3.9.2
@@ -34,6 +34,7 @@ dependencies:
   # ✅ External Packages
   url_launcher: ^6.2.5       # Instagram open करने के लिए
   image_picker: ^1.1.1       # Gallery से images लेने के लिए
+  file_picker: ^8.1.6        # File picker for media selection
   saver_gallery: ^4.0.1
   share_plus: ^10.0.2
   webview_flutter: ^4.7.0
@@ -64,6 +65,8 @@ dependencies:
   in_app_review: ^2.0.11
   in_app_purchase: ^3.2.3
   fluttertoast: ^9.0.0
+  photo_manager: ^3.5.0
+  permission_handler: ^11.0.1
 
 dev_dependencies:
   flutter_test:
@@ -125,10 +128,11 @@ flutter:
         - asset: assets/fonts/Lobster-Regular.ttf
 
 flutter_launcher_icons:
-  android: true
-  ios: false
-  image_path: "assets/images/app_icon.png" # 👈 Path to your image
-  min_sdk_android: 21 # optional
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/app_icon.png"
 
 flutter_native_splash:
   color: "#FFFFFF"

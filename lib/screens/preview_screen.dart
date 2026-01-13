@@ -64,13 +64,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
           Navigator.of(context).pop(); // Auto-Pop
           _isDialogOpen = false;
 
-          // 3. Trigger Rating AFTER Downling dialog close
+          // 3. Trigger Native Rating AFTER Download dialog close
           // Small delay to ensure snackbars or pop animations finish if any
           Future.delayed(const Duration(seconds: 1), () {
             if (mounted) {
-              RatingService().checkAndShowRating(
-                RatingService().mediaSaveCountKey,
-              );
+              // Show native rating every time for Paste Link flow
+              RatingService().showNativeRating(null, always: true);
             }
           });
         }

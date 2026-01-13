@@ -64,12 +64,14 @@ class _RatingDialogState extends State<RatingDialog> {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height > 800 ? 16 : 32,
+                ),
 
                 // Emoji Image
                 Container(
-                  width: 140,
-                  height: 140,
+                  width: MediaQuery.of(context).size.height > 800 ? 120 : 140,
+                  height: MediaQuery.of(context).size.height > 800 ? 120 : 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFFFFE8FF),
@@ -77,12 +79,18 @@ class _RatingDialogState extends State<RatingDialog> {
                   child: Center(
                     child: Image.asset(
                       'assets/images/emoji.png',
-                      width: 100,
-                      height: 100,
+                      width: MediaQuery.of(context).size.height > 800
+                          ? 85
+                          : 100,
+                      height: MediaQuery.of(context).size.height > 800
+                          ? 85
+                          : 100,
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height > 800 ? 20 : 32,
+                ),
 
                 // Custom Slider
                 Padding(
@@ -141,7 +149,9 @@ class _RatingDialogState extends State<RatingDialog> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 25),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height > 800 ? 16 : 25,
+                ),
 
                 // Dynamic Rating Text
                 Text(
@@ -152,7 +162,9 @@ class _RatingDialogState extends State<RatingDialog> {
                     color: Colors.black,
                   ),
                 ),
-                const SizedBox(height: 30),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height > 800 ? 20 : 30,
+                ),
 
                 // Submit Button
                 SizedBox(

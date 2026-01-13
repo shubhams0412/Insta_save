@@ -19,6 +19,8 @@ class SalesConfig {
   final Color featureColor;
   final double planSize;
   final Color planColor;
+  final Color priceColor;
+  final Color originalPriceColor;
   final List<Map<String, dynamic>> features;
   final List<Map<String, dynamic>> plans;
   final String privacyText;
@@ -26,6 +28,15 @@ class SalesConfig {
   final String closeText;
   final double footerTextSize;
   final Color footerTextColor;
+  final String featuresTitle;
+  final double featuresTitleSize;
+  final Color featuresTitleColor;
+  final String continueButtonText;
+  final double continueButtonTextSize;
+  final Color continueButtonTextColor;
+  final String restoreText;
+  final double restoreTextSize;
+  final Color restoreTextColor;
 
   SalesConfig({
     required this.titleText,
@@ -36,8 +47,13 @@ class SalesConfig {
     required this.subTitleColor,
     required this.featureSize,
     required this.featureColor,
+    required this.featuresTitle,
+    required this.featuresTitleSize,
+    required this.featuresTitleColor,
     required this.planSize,
     required this.planColor,
+    required this.priceColor,
+    required this.originalPriceColor,
     required this.features,
     required this.plans,
     required this.privacyText,
@@ -45,6 +61,12 @@ class SalesConfig {
     required this.closeText,
     required this.footerTextSize,
     required this.footerTextColor,
+    required this.continueButtonText,
+    required this.continueButtonTextSize,
+    required this.continueButtonTextColor,
+    required this.restoreText,
+    required this.restoreTextSize,
+    required this.restoreTextColor,
   });
 
   factory SalesConfig.fromJson(Map<String, dynamic> json) {
@@ -61,8 +83,30 @@ class SalesConfig {
       featureColor: RemoteConfigModels.parseColor(
         json['featuresStyle']['textColor'],
       ),
+      featuresTitle:
+          json['featuresTitle'] != null && json['featuresTitle']['text'] != null
+          ? json['featuresTitle']['text']
+          : 'WHAT YOU GET',
+      featuresTitleSize:
+          json['featuresTitle'] != null &&
+              json['featuresTitle']['textSize'] != null
+          ? (json['featuresTitle']['textSize'] as num).toDouble()
+          : 16.0,
+      featuresTitleColor:
+          json['featuresTitle'] != null &&
+              json['featuresTitle']['textColor'] != null
+          ? RemoteConfigModels.parseColor(json['featuresTitle']['textColor'])
+          : Colors.white,
       planSize: (json['plansStyle']['textSize'] as num).toDouble(),
       planColor: RemoteConfigModels.parseColor(json['plansStyle']['textColor']),
+      priceColor: json['plansStyle']['priceColor'] != null
+          ? RemoteConfigModels.parseColor(json['plansStyle']['priceColor'])
+          : Colors.white,
+      originalPriceColor: json['plansStyle']['originalPriceColor'] != null
+          ? RemoteConfigModels.parseColor(
+              json['plansStyle']['originalPriceColor'],
+            )
+          : Colors.white38,
       features: List<Map<String, dynamic>>.from(json['features']),
       plans: List<Map<String, dynamic>>.from(json['plans']),
       privacyText: json['privacyText'] ?? 'Privacy Policy',
@@ -79,6 +123,35 @@ class SalesConfig {
             ? json['footerStyle']['textColor']
             : '#60FFFFFF',
       ),
+      continueButtonText:
+          json['continueButton'] != null &&
+              json['continueButton']['text'] != null
+          ? json['continueButton']['text']
+          : 'Continue',
+      continueButtonTextSize:
+          json['continueButton'] != null &&
+              json['continueButton']['textSize'] != null
+          ? (json['continueButton']['textSize'] as num).toDouble()
+          : 18.0,
+      continueButtonTextColor:
+          json['continueButton'] != null &&
+              json['continueButton']['textColor'] != null
+          ? RemoteConfigModels.parseColor(json['continueButton']['textColor'])
+          : Colors.white,
+      restoreText:
+          json['restoreButton'] != null && json['restoreButton']['text'] != null
+          ? json['restoreButton']['text']
+          : 'Restore Purchase',
+      restoreTextSize:
+          json['restoreButton'] != null &&
+              json['restoreButton']['textSize'] != null
+          ? (json['restoreButton']['textSize'] as num).toDouble()
+          : 14.0,
+      restoreTextColor:
+          json['restoreButton'] != null &&
+              json['restoreButton']['textColor'] != null
+          ? RemoteConfigModels.parseColor(json['restoreButton']['textColor'])
+          : Colors.white,
     );
   }
 }

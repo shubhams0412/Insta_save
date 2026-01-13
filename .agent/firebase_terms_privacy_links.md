@@ -59,7 +59,7 @@ The existing `sales_screen_config` parameter now includes two additional fields:
       "title": "Annual",
       "subtitle": "3-day free trial",
       "price": "$19.99",
-      "originalPrice": "$32.00",
+      "savePercentage": 93,
       "badgeText": "Best - $0.38 / week"
     },
     {

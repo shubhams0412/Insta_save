@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:insta_save/main.dart';
 import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/iap_service.dart';
 
 class AdService {
   static final AdService _instance = AdService._internal();
@@ -85,6 +86,12 @@ class AdService {
 
   Future<void> showAppOpenAdWithLoader(BuildContext context) async {
     if (_isShowingAppOpenAd) return;
+
+    // Check if user is premium
+    if (IAPService().isPremium.value) {
+      debugPrint("App Open Ad Flow: Skipping - User is Premium.");
+      return;
+    }
 
     // Check Remote Config
     final adsConfig = RemoteConfigService().adsConfig;
@@ -218,6 +225,13 @@ class AdService {
   // --- INTERSTITIAL ADS ---
 
   void showInterstitialAd({required Function onAdDismissed}) {
+    // Check if user is premium
+    if (IAPService().isPremium.value) {
+      debugPrint("Interstitial Ad Flow: Skipping - User is Premium.");
+      onAdDismissed();
+      return;
+    }
+
     // Check Remote Config
     final adsConfig = RemoteConfigService().adsConfig;
     if (adsConfig != null && !adsConfig.interstitial) {
@@ -283,6 +297,12 @@ class AdService {
   // --- BANNER ADS ---
 
   BannerAd? createBannerAd() {
+    // Check if user is premium
+    if (IAPService().isPremium.value) {
+      debugPrint("Banner Ad Flow: Skipping - User is Premium.");
+      return null;
+    }
+
     // Check Remote Config
     final adsConfig = RemoteConfigService().adsConfig;
     if (adsConfig != null && !adsConfig.banner) {

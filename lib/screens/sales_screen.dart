@@ -4,6 +4,7 @@ import 'package:insta_save/models/remote_config_models.dart';
 import 'package:insta_save/services/navigation_helper.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/services/webview_screen.dart';
+import 'package:insta_save/services/iap_service.dart';
 
 // Entry point for testing
 void main() async {
@@ -29,6 +30,19 @@ class _SalesScreenState extends State<SalesScreen> {
   void initState() {
     super.initState();
     _loadConfig();
+    IAPService().isPremium.addListener(_onPremiumChanged);
+  }
+
+  @override
+  void dispose() {
+    IAPService().isPremium.removeListener(_onPremiumChanged);
+    super.dispose();
+  }
+
+  void _onPremiumChanged() {
+    if (IAPService().isPremium.value && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _loadConfig() async {
@@ -43,6 +57,56 @@ class _SalesScreenState extends State<SalesScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  String _getOriginalPrice() {
+    final priceStr = IAPService().getWeeklyPrice();
+    final priceVal = IAPService().getWeeklyPriceValue();
+    final fallback = _config?.plans.first['originalPrice'] ?? '';
+
+    if (_config == null || _config!.plans.isEmpty) return fallback;
+
+    final plan = _config!.plans.first;
+    // Check if savePercentage exists and is valid
+    if (!plan.containsKey('savePercentage')) return fallback;
+
+    final savePercent = plan['savePercentage'];
+    if (savePercent is! num) return fallback;
+
+    // Avoid division by zero or negative
+    if (savePercent >= 100) return fallback;
+
+    // Calculate Original = Price * 100 / (100 - Save%)
+    double originalVal = priceVal * 100 / (100 - savePercent);
+
+    // Heuristic to match the format of priceStr
+    // Find the number in the string (support comma or dot decimal)
+    final match = RegExp(r'(\d+([.,]\d+)?)').firstMatch(priceStr);
+    if (match != null) {
+      String numberPart = match.group(1)!;
+
+      String newNumberPart;
+      if (numberPart.contains(',')) {
+        // Assume comma decimal
+        int decimals = numberPart.contains(',')
+            ? numberPart.split(',')[1].length
+            : 2;
+        newNumberPart = originalVal
+            .toStringAsFixed(decimals)
+            .replaceAll('.', ',');
+      } else if (numberPart.contains('.')) {
+        // Dot decimal
+        int decimals = numberPart.split('.')[1].length;
+        newNumberPart = originalVal.toStringAsFixed(decimals);
+      } else {
+        // No decimal
+        newNumberPart = originalVal.toStringAsFixed(0);
+      }
+
+      return priceStr.replaceFirst(numberPart, newNumberPart);
+    }
+
+    return fallback;
   }
 
   @override
@@ -86,7 +150,8 @@ class _SalesScreenState extends State<SalesScreen> {
                             children: [
                               SizedBox(
                                 height:
-                                    MediaQuery.of(context).size.height * 0.22,
+                                    (MediaQuery.of(context).size.height * 0.22)
+                                        .clamp(80.0, 180.0),
                               ),
 
                               // HEADER
@@ -113,31 +178,55 @@ class _SalesScreenState extends State<SalesScreen> {
                               const SizedBox(height: 40),
 
                               // FEATURES LIST
-                              _buildSectionHeader('WHAT YOU GET'),
+                              _buildSectionHeader(
+                                _config?.featuresTitle ?? 'WHAT YOU GET',
+                                color: _config?.featuresTitleColor,
+                                fontSize: _config?.featuresTitleSize,
+                              ),
                               const SizedBox(height: 16),
                               if (_config != null)
-                                ..._config!.features.map(
-                                  (f) => _FeatureRow(
-                                    text: f['text'],
-                                    textSize: _config!.featureSize,
-                                    textColor: _config!.featureColor,
+                                Center(
+                                  child: Container(
+                                    constraints: BoxConstraints(
+                                      maxWidth:
+                                          MediaQuery.of(context).size.width *
+                                          0.85,
+                                    ),
+                                    child: IntrinsicWidth(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: _config!.features
+                                            .map(
+                                              (f) => _FeatureRow(
+                                                text: f['text'],
+                                                textSize: _config!.featureSize,
+                                                textColor:
+                                                    _config!.featureColor,
+                                              ),
+                                            )
+                                            .toList(),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               const SizedBox(height: 40),
 
-                              // ANNUAL PLAN
+                              // Week PLAN
                               if (_config != null && _config!.plans.isNotEmpty)
                                 _PlanCard(
                                   index: 0,
                                   isSelected: true,
                                   title: _config!.plans[0]['title'],
-                                  subtitle: _config!.plans[0]['subtitle'],
-                                  price: _config!.plans[0]['price'],
-                                  originalPrice:
-                                      _config!.plans[0]['originalPrice'],
+                                  subtitle: IAPService().getTrialText(),
+                                  price: IAPService().getWeeklyPrice(),
+                                  originalPrice: _getOriginalPrice(),
                                   badgeText: _config!.plans[0]['badgeText'],
                                   titleSize: _config!.planSize,
                                   titleColor: _config!.planColor,
+                                  priceColor: _config!.priceColor,
+                                  originalPriceColor:
+                                      _config!.originalPriceColor,
                                   onTap: () {},
                                 ),
 
@@ -172,7 +261,7 @@ class _SalesScreenState extends State<SalesScreen> {
                               ),
                               child: ElevatedButton(
                                 onPressed: () {
-                                  // TODO: Implement Purchase Logic
+                                  IAPService().buyWeekly();
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
@@ -181,11 +270,14 @@ class _SalesScreenState extends State<SalesScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Continue',
+                                child: Text(
+                                  _config?.continueButtonText ?? 'Continue',
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
+                                    color:
+                                        _config?.continueButtonTextColor ??
+                                        Colors.white,
+                                    fontSize:
+                                        _config?.continueButtonTextSize ?? 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -195,8 +287,51 @@ class _SalesScreenState extends State<SalesScreen> {
 
                             // Restore
                             TextButton(
-                              onPressed: () {
-                                // TODO: Implement Restore Logic
+                              onPressed: () async {
+                                // Show loading indicator
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) => const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                );
+
+                                // Attempt to restore purchases
+                                final restored = await IAPService()
+                                    .restorePurchases();
+
+                                // Close loading dialog
+                                if (mounted) {
+                                  Navigator.of(context).pop();
+
+                                  // Show appropriate feedback
+                                  if (restored) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          '✅ Purchase restored successfully!',
+                                          style: TextStyle(color: Colors.black),
+                                        ),
+                                        backgroundColor: Colors.white,
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'No previous purchases found to restore.',
+                                          style: TextStyle(color: Colors.black),
+                                        ),
+                                        backgroundColor: Colors.white,
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                }
                               },
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
@@ -212,11 +347,13 @@ class _SalesScreenState extends State<SalesScreen> {
                                     ),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Restore Purchase',
+                                child: Text(
+                                  _config?.restoreText ?? 'Restore Purchase',
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
+                                    color:
+                                        _config?.restoreTextColor ??
+                                        Colors.white,
+                                    fontSize: _config?.restoreTextSize ?? 14,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -265,13 +402,13 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, {Color? color, double? fontSize}) {
     return Text(
       title,
       textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 16, // Slightly smaller for elegance
+      style: TextStyle(
+        color: color ?? Colors.white,
+        fontSize: fontSize ?? 16, // Slightly smaller for elegance
         fontWeight: FontWeight.w800,
         letterSpacing: 1.2,
       ),
@@ -300,10 +437,11 @@ class _FeatureRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.check, color: Color(0xFF8a878c), size: 20),
           const SizedBox(width: 12),
-          Expanded(
+          Flexible(
             child: Text(
               text,
               style: TextStyle(
@@ -329,6 +467,8 @@ class _PlanCard extends StatelessWidget {
   final String? badgeText;
   final double titleSize;
   final Color titleColor;
+  final Color priceColor;
+  final Color originalPriceColor;
   final VoidCallback onTap;
 
   const _PlanCard({
@@ -341,6 +481,8 @@ class _PlanCard extends StatelessWidget {
     this.badgeText,
     required this.titleSize,
     required this.titleColor,
+    required this.priceColor,
+    required this.originalPriceColor,
     required this.onTap,
   });
 
@@ -441,8 +583,8 @@ class _PlanCard extends StatelessWidget {
                     children: [
                       Text(
                         price,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: priceColor,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
@@ -450,10 +592,11 @@ class _PlanCard extends StatelessWidget {
                       if (originalPrice != null)
                         Text(
                           originalPrice!,
-                          style: const TextStyle(
-                            color: Colors.white38,
+                          style: TextStyle(
+                            color: originalPriceColor,
                             fontSize: 13,
                             decoration: TextDecoration.lineThrough,
+                            decorationColor: originalPriceColor,
                           ),
                         ),
                     ],

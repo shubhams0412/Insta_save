@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 // ✅ Import your app screens
@@ -10,6 +9,7 @@ import 'package:insta_save/services/webview_screen.dart';
 import 'package:insta_save/services/remote_config_service.dart';
 import 'package:insta_save/services/ad_service.dart';
 import 'package:insta_save/services/rating_service.dart';
+import 'package:insta_save/services/iap_service.dart';
 import 'package:insta_save/utils/constants.dart';
 
 import '_buildStepCard.dart';
@@ -22,13 +22,7 @@ class SettingsScreen extends StatelessWidget {
     return PopScope(
       canPop: true, // Allow pop, but listen to it
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) {
-          // User is leaving settings screen
-          debugPrint("Leaving Settings Screen - Checking Rating Trigger");
-          await RatingService().checkAndShowRating(
-            RatingService().settingsReturnCountKey,
-          );
-        }
+        // Rating trigger removed as per new strategy
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -63,7 +57,16 @@ class SettingsScreen extends StatelessWidget {
             children: [
               // 1. Premium Banner
               _buildRemoveAdsBanner(context),
-              const SizedBox(height: 24),
+              ValueListenableBuilder<bool>(
+                valueListenable: IAPService().isPremium,
+                builder: (context, isPremium, child) {
+                  // Hide spacing if user is premium
+                  if (isPremium) {
+                    return const SizedBox.shrink();
+                  }
+                  return const SizedBox(height: 24);
+                },
+              ),
               // ... rest of the body
               // 2. Appearance Section
               _buildSettingsGroup(
@@ -85,7 +88,8 @@ class SettingsScreen extends StatelessWidget {
                     iconPath: 'assets/images/st_love.png',
                     title: 'Send Love',
                     onTap: () {
-                      // TODO: Implement Rating logic or store link
+                      // Show native rating popup
+                      RatingService().showNativeRating(null, always: true);
                     },
                   ),
                   _buildTile(
@@ -166,61 +170,74 @@ class SettingsScreen extends StatelessWidget {
   Widget _buildRemoveAdsBanner(BuildContext context) {
     final settingsConfig = RemoteConfigService().settingsConfig;
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          createSlideRoute(const SalesScreen(), direction: SlideFrom.bottom),
+    return ValueListenableBuilder<bool>(
+      valueListenable: IAPService().isPremium,
+      builder: (context, isPremium, child) {
+        // Hide the banner if user is premium
+        if (isPremium) {
+          return const SizedBox.shrink();
+        }
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              createSlideRoute(
+                const SalesScreen(),
+                direction: SlideFrom.bottom,
+              ),
+            );
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF9881F), Color(0xFFE15151)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFE15151).withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              leading: Image.asset(
+                'assets/images/ads_setting_sales.png',
+                width: 40,
+                height: 40,
+              ),
+              title: Text(
+                settingsConfig?.adsBannerTitle ?? 'Remove Ads',
+                style: TextStyle(
+                  color: settingsConfig?.adsBannerTitleColor ?? Colors.white,
+                  fontWeight: FontWeight.w500,
+                  fontSize: settingsConfig?.adsBannerTitleSize ?? 20,
+                ),
+              ),
+              subtitle: Text(
+                settingsConfig?.adsBannerSubtitle ?? 'Become a PRO Member',
+                style: TextStyle(
+                  color: settingsConfig?.adsBannerSubtitleColor ?? Colors.white,
+                  fontSize: settingsConfig?.adsBannerSubtitleSize ?? 16,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              trailing: const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+          ),
         );
       },
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFF9881F), Color(0xFFE15151)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFE15151).withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: Image.asset(
-            'assets/images/ads_setting_sales.png',
-            width: 40,
-            height: 40,
-          ),
-          title: Text(
-            settingsConfig?.adsBannerTitle ?? 'Remove Ads',
-            style: TextStyle(
-              color: settingsConfig?.adsBannerTitleColor ?? Colors.white,
-              fontWeight: FontWeight.w500,
-              fontSize: settingsConfig?.adsBannerTitleSize ?? 20,
-            ),
-          ),
-          subtitle: Text(
-            settingsConfig?.adsBannerSubtitle ?? 'Become a PRO Member',
-            style: TextStyle(
-              color: settingsConfig?.adsBannerSubtitleColor ?? Colors.white,
-              fontSize: settingsConfig?.adsBannerSubtitleSize ?? 16,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-          trailing: const Icon(
-            Icons.arrow_forward_ios,
-            color: Colors.white,
-            size: 16,
-          ),
-        ),
-      ),
     );
   }
 

@@ -144,11 +144,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
     _hasHandledSuccess = true;
 
     // 1. Save to SharedPreferences (Equivalent to UserDefaults)
-    final prefs = await SharedPreferencesWithCache.create(
-      cacheOptions: const SharedPreferencesWithCacheOptions(
-        allowList: <String>{'isInstagramLoggedIn', 'instagramLoginDate'},
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isInstagramLoggedIn', true);
     await prefs.setString(
       'instagramLoginDate',

@@ -153,8 +153,18 @@ class RemoteConfigService {
           "textSize": 16,
           "textColor": "#B3FFFFFF",
         },
+        "featuresTitle": {
+          "text": "WHAT YOU GET",
+          "textSize": 16,
+          "textColor": "#FFFFFF",
+        },
         "featuresStyle": {"textSize": 15, "textColor": "#FFFFFF"},
-        "plansStyle": {"textSize": 18, "textColor": "#FFFFFF"},
+        "plansStyle": {
+          "textSize": 18,
+          "textColor": "#FFFFFF",
+          "priceColor": "#FFFFFF",
+          "originalPriceColor": "#60FFFFFF",
+        },
         "features": [
           {"text": "Unlimited Reposts"},
           {"text": "Stories & Highlights"},
@@ -164,22 +174,34 @@ class RemoteConfigService {
         ],
         "plans": [
           {
-            "title": "Annual",
+            "title": "Weekly",
             "subtitle": "3-day free trial",
-            "price": "\$19.99",
-            "originalPrice": "\$32.00",
-            "badgeText": "Best - \$0.38 / week",
+            "price": "\$4.99",
+            "savePercentage": 93,
+            "badgeText": "Popular",
+            "productId": "com.video.downloader.saver.manager.week",
           },
           {
             "title": "Monthly",
             "subtitle": "3-day free trial",
             "price": "\$9.99",
+            "productId": "com.video.downloader.saver.manager.month",
           },
         ],
         "privacyText": "Privacy Policy",
         "termsText": "Terms of Use",
         "closeText": "Close",
         "footerStyle": {"textSize": 12.0, "textColor": "#60FFFFFF"},
+        "continueButton": {
+          "text": "Continue",
+          "textSize": 18,
+          "textColor": "#FFFFFF",
+        },
+        "restoreButton": {
+          "text": "Restore Purchase",
+          "textSize": 14,
+          "textColor": "#FFFFFF",
+        },
       }),
       "intro_screen_config": jsonEncode({
         "items": [

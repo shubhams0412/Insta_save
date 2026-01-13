@@ -9,11 +9,18 @@ import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import java.io.File
 import java.io.FileInputStream
 import java.io.OutputStream
 
 class MainActivity : FlutterActivity() {
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // Handle the splash screen transition.
+        installSplashScreen()
+        super.onCreate(savedInstanceState)
+    }
 
     private val MEDIA_CHANNEL = "media_store"
     private val INSTA_CHANNEL = "insta_share"
