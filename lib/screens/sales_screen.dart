@@ -143,17 +143,12 @@ class _SalesScreenState extends State<SalesScreen> {
                     children: [
                       // Scrollable Content
                       Expanded(
-                        child: SingleChildScrollView(
+                        child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24.0),
                           child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              SizedBox(
-                                height:
-                                    (MediaQuery.of(context).size.height * 0.22)
-                                        .clamp(80.0, 180.0),
-                              ),
-
                               // HEADER
                               Text(
                                 _config?.titleText ?? 'Instant Saver Premium',

@@ -15,7 +15,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerVertical="true"
-            android:text="InstaSave"
+            android:text="InstantSave"
             android:textColor="#FFFFFF"
             android:textSize="24sp"
             android:textStyle="bold"
@@ -37,13 +37,6 @@
             android:gravity="center"
             android:orientation="horizontal">
 
-            <ImageView
-                android:layout_width="45dp"
-                android:layout_height="45dp"
-                android:layout_marginEnd="16dp"
-                android:src="@drawable/ic_instagram"
-                android:tint="#FFFFFF" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -60,12 +53,6 @@
             android:background="@drawable/gradient_blue_button"
             android:gravity="center"
             android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="45dp"
-                android:layout_height="45dp"
-                android:layout_marginEnd="16dp"
-                android:src="@drawable/pics_repost" />
 
             <TextView
                 android:layout_width="wrap_content"

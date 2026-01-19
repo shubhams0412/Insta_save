@@ -13,7 +13,9 @@ import 'package:insta_save/main.dart';
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp(isIntroSeen: false, isRatingSeen: false,));
+    await tester.pumpWidget(
+      const MyApp(isIntroSeen: false, isRatingSeen: false),
+    );
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);

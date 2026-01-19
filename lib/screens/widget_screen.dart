@@ -17,7 +17,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
   final List<String> _widgetImages = [
     "assets/images/widget_1.png",
     "assets/images/widget_2.png",
-    "assets/images/widget_4.png",
+    "assets/images/widget_3.png",
   ];
 
   final List<String> _steps = [
@@ -102,7 +102,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
             physics: const BouncingScrollPhysics(),
             itemBuilder: (context, index) {
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
+                margin: const EdgeInsets.symmetric(horizontal: 60),
                 child: Image.asset(
                   _widgetImages[index],
                   fit: BoxFit.contain,

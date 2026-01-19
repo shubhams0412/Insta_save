@@ -18,7 +18,7 @@
 
         <TextView
                 android:id="@+id/widget_header"
-                android:text="InstaSave"
+                android:text="InstantSave"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -44,20 +44,13 @@
                 android:gravity="center"
                 android:padding="6dp">
 
-            <ImageView
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:src="@android:drawable/ic_menu_camera"
-                    android:tint="#FFFFFF" />
-
             <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Import"
                     android:gravity="center"
                     android:textColor="#FFFFFF"
-                    android:textSize="12sp"
-                    android:paddingTop="4dp" />
+                    android:textSize="14sp" />
         </LinearLayout>
 
         <Space
@@ -75,19 +68,13 @@
                 android:gravity="center"
                 android:padding="6dp">
 
-            <ImageView
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:src="@drawable/pics_repost" />
-
             <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Select Pics\n Repost"
                     android:gravity="center"
                     android:textColor="#FFFFFF"
-                    android:textSize="12sp"
-                    android:paddingTop="4dp" />
+                    android:textSize="14sp" />
         </LinearLayout>
 
     </LinearLayout>

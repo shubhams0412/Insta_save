@@ -631,6 +631,7 @@ class _HomeScreenState extends State<HomeScreen>
                               )
                               .toList(),
                           viewAllTitle: "All Posts",
+                          emptyMessage: "You haven't shared\nany posts yet.",
                         ),
 
                         // REELS
@@ -645,6 +646,7 @@ class _HomeScreenState extends State<HomeScreen>
                               )
                               .toList(),
                           viewAllTitle: "All Reels",
+                          emptyMessage: "You haven't shared\nany videos yet.",
                         ),
 
                         // DEVICE MEDIA
@@ -658,6 +660,8 @@ class _HomeScreenState extends State<HomeScreen>
                               )
                               .toList(),
                           viewAllTitle: "All Device Media",
+                          emptyMessage:
+                              "You haven't shared\nany device media yet.",
                         ),
                       ],
                     ),
@@ -672,6 +676,7 @@ class _HomeScreenState extends State<HomeScreen>
     required List<DownloadTask> activeTasks,
     required List<Map<String, dynamic>> mediaList,
     required String viewAllTitle,
+    required String emptyMessage,
   }) {
     // 1. DEDUPLICATION
     final filteredMediaList = mediaList.where((media) {
@@ -688,10 +693,10 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             Image.asset('assets/images/placeholder.png', width: 50, height: 50),
             const SizedBox(height: 14),
-            const Text(
-              "You haven't shared\nany posts yet.",
+            Text(
+              emptyMessage,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 18,
                 color: Colors.black,
                 fontWeight: FontWeight.w500,
