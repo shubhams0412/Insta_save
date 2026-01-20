@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 // ✅ Import your app screens
-import 'package:insta_save/screens/sales_screen.dart';
-import 'package:insta_save/screens/widget_screen.dart';
-import 'package:insta_save/services/navigation_helper.dart';
-import 'package:insta_save/services/webview_screen.dart';
-import 'package:insta_save/services/remote_config_service.dart';
-import 'package:insta_save/services/ad_service.dart';
-import 'package:insta_save/services/rating_service.dart';
-import 'package:insta_save/services/iap_service.dart';
-import 'package:insta_save/utils/constants.dart';
+import 'package:InstSave/screens/sales_screen.dart';
+import 'package:InstSave/screens/widget_screen.dart';
+import 'package:InstSave/services/navigation_helper.dart';
+import 'package:InstSave/services/webview_screen.dart';
+import 'package:InstSave/services/remote_config_service.dart';
+import 'package:InstSave/services/ad_service.dart';
+import 'package:InstSave/services/rating_service.dart';
+import 'package:InstSave/services/iap_service.dart';
+import 'package:InstSave/utils/constants.dart';
 
 import '_buildStepCard.dart';
 

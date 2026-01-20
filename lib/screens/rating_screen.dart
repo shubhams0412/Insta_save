@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:insta_save/screens/home_screen.dart';
-import 'package:insta_save/services/remote_config_service.dart';
+import 'package:InstSave/screens/home_screen.dart';
+import 'package:InstSave/services/remote_config_service.dart';
 
 class ReviewsScreen extends StatefulWidget {
   const ReviewsScreen({super.key});

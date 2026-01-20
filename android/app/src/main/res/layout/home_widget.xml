@@ -18,7 +18,7 @@
 
         <TextView
                 android:id="@+id/widget_header"
-                android:text="InstantSave"
+                android:text="InstSave"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
                 android:textStyle="bold" />

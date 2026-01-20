@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
-import 'package:insta_save/services/remote_config_service.dart';
+import 'package:InstSave/services/remote_config_service.dart';
 
 class IAPService {
   static final IAPService _instance = IAPService._internal();

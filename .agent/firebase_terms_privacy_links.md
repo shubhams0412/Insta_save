@@ -36,7 +36,7 @@ The existing `sales_screen_config` parameter now includes two additional fields:
 ```json
 {
   "title": {
-    "text": "Instant Saver Premium",
+    "text": "InstSave Premium",
     "textSize": 28,
     "textColor": "#FFFFFF"
   },

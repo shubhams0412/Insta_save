@@ -1,5 +1,5 @@
 class Constants {
-  static const String AppName = 'InstantSave';
+  static const String AppName = 'InstSave';
   static const String Play_Store_URL =
-      'https://apps.apple.com/app/id6475133333'; // Replace with actual App Store URL
+      'https://play.google.com/store/apps/details?id=com.video.downloader.saver.manager.free.allvideodownloader';
 }

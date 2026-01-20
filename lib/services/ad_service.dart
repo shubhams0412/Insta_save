@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:insta_save/main.dart';
-import 'package:insta_save/services/remote_config_service.dart';
-import 'package:insta_save/services/iap_service.dart';
+import 'package:InstSave/main.dart';
+import 'package:InstSave/services/remote_config_service.dart';
+import 'package:InstSave/services/iap_service.dart';
 
 class AdService {
   static final AdService _instance = AdService._internal();

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
-import 'package:insta_save/models/remote_config_models.dart';
+import 'package:InstSave/models/remote_config_models.dart';
 
 class RemoteConfigService {
   static final RemoteConfigService _instance = RemoteConfigService._internal();
@@ -144,7 +144,7 @@ class RemoteConfigService {
     return {
       "sales_screen_config": jsonEncode({
         "title": {
-          "text": "Instant Saver Premium",
+          "text": "InstSave Premium",
           "textSize": 28,
           "textColor": "#FFFFFF",
         },

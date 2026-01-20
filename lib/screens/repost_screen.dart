@@ -13,8 +13,8 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:insta_save/services/ad_service.dart'; // Import this
-import 'package:insta_save/utils/constants.dart';
+import 'package:InstSave/services/ad_service.dart'; // Import this
+import 'package:InstSave/utils/constants.dart';
 
 class RepostScreen extends StatefulWidget {
   final String imageUrl;

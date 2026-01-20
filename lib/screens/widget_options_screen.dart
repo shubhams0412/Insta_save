@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:insta_save/utils/constants.dart';
+import 'package:InstSave/utils/constants.dart';
 
 // If you have the file, keep your import.
 // If not, I have included the OptionCard class at the bottom of this file.

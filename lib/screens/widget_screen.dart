@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:insta_save/utils/constants.dart';
+import 'package:InstSave/utils/constants.dart';
 
 class WidgetsScreen extends StatefulWidget {
   const WidgetsScreen({super.key});

@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:insta_save/screens/repost_screen.dart';
+import 'package:InstSave/screens/repost_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:insta_save/services/saved_post.dart';
-import 'package:insta_save/services/navigation_helper.dart';
+import 'package:InstSave/services/saved_post.dart';
+import 'package:InstSave/services/navigation_helper.dart';
 
 class AllMediaScreen extends StatefulWidget {
   final String title;

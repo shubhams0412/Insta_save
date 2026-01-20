@@ -1,6 +1,6 @@
 {
-    "name": "insta_save",
-    "short_name": "insta_save",
+    "name": "InstaSave",
+    "short_name": "InstaSave",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
