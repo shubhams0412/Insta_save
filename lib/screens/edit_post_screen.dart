@@ -7,6 +7,7 @@ import 'package:InstSave/screens/repost_screen.dart';
 import 'package:InstSave/services/navigation_helper.dart';
 import 'package:InstSave/services/saved_post.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:InstSave/utils/ui_utils.dart';
 
 class EditPostScreen extends StatefulWidget {
   final String imagePath;
@@ -144,9 +145,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    UIUtils.showSnackBar(context, message);
   }
 
   // --- UI BUILD ---

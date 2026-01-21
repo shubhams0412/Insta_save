@@ -6,6 +6,7 @@ import 'package:InstSave/screens/repost_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:InstSave/services/saved_post.dart';
 import 'package:InstSave/services/navigation_helper.dart';
+import 'package:InstSave/utils/ui_utils.dart';
 
 class AllMediaScreen extends StatefulWidget {
   final String title;
@@ -127,20 +128,23 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
           final String path = decoded['localPath'];
 
           if (_selectedPaths.contains(path)) {
-            // Delete actual file
-            try {
-              final file = File(path);
-              if (file.existsSync()) file.deleteSync();
-            } catch (e) {
-              debugPrint("⚠️ File delete error: $e");
+            // Attempt to delete physical file
+            final file = File(path);
+            if (file.existsSync()) {
+              try {
+                file.deleteSync();
+              } catch (e) {
+                debugPrint("⚠️ Could not delete physical file: $e");
+              }
+            } else {
+              debugPrint("ℹ️ File already missing from storage: $path");
             }
+            // Even if file is missing, we proceed to remove it from our database
           } else {
             // Keep this item
             updatedData.add(itemJson);
           }
         } catch (e) {
-          // If JSON is corrupt, maybe don't keep it, or keep it safe.
-          // Here we keep it to prevent accidental data loss of good items.
           updatedData.add(itemJson);
         }
       }
@@ -160,17 +164,13 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
           _isDeleting = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Items deleted successfully")),
-        );
+        UIUtils.showSnackBar(context, 'Items deleted successfully');
       }
     } catch (e) {
       debugPrint("❌ Critical delete error: $e");
       if (mounted) {
         setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        UIUtils.showSnackBar(context, "Error: $e");
       }
     }
   }
@@ -210,7 +210,11 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
       backgroundColor: Colors.white,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: Colors.grey),
+        icon: const Icon(
+          Icons.arrow_back_ios_new,
+          color: Colors.grey,
+          size: 20,
+        ),
         onPressed: () {
           if (_isSelectionMode) {
             _toggleSelectionMode();
@@ -322,9 +326,14 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
                       direction: SlideFrom.bottom,
                     ),
                   )
-                  .then((deleted) async {
-                    // If item was deleted, remove from list
-                    if (deleted == true) {
+                  .then((result) async {
+                    // If result is Map and has home flag, pop back to home with the result
+                    if (result is Map && result['home'] == true) {
+                      if (mounted) {
+                        Navigator.of(context).pop(result);
+                      }
+                    } else if (result == true) {
+                      // If item was deleted, remove from list
                       setState(() {
                         _currentList.removeWhere((item) {
                           final p = item['data'] as SavedPost;

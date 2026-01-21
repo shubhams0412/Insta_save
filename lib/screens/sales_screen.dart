@@ -5,6 +5,7 @@ import 'package:InstSave/services/navigation_helper.dart';
 import 'package:InstSave/services/remote_config_service.dart';
 import 'package:InstSave/services/webview_screen.dart';
 import 'package:InstSave/services/iap_service.dart';
+import 'package:InstSave/utils/ui_utils.dart';
 
 // Entry point for testing
 void main() async {
@@ -304,26 +305,14 @@ class _SalesScreenState extends State<SalesScreen> {
 
                                   // Show appropriate feedback
                                   if (restored) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          '✅ Purchase restored successfully!',
-                                          style: TextStyle(color: Colors.black),
-                                        ),
-                                        backgroundColor: Colors.white,
-                                        duration: Duration(seconds: 3),
-                                      ),
+                                    UIUtils.showSnackBar(
+                                      context,
+                                      '✅ Purchase restored successfully!',
                                     );
                                   } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'No previous purchases found to restore.',
-                                          style: TextStyle(color: Colors.black),
-                                        ),
-                                        backgroundColor: Colors.white,
-                                        duration: Duration(seconds: 3),
-                                      ),
+                                    UIUtils.showSnackBar(
+                                      context,
+                                      'No previous purchases found to restore.',
                                     );
                                   }
                                 }

@@ -11,6 +11,7 @@ import 'package:InstSave/services/download_manager.dart';
 import 'package:InstSave/services/navigation_helper.dart';
 import 'package:InstSave/widgets/status_dialog.dart';
 import 'package:InstSave/services/rating_service.dart';
+import 'package:InstSave/utils/ui_utils.dart';
 
 class PreviewScreen extends StatefulWidget {
   // Static flag to prevent HomeScreen from triggering rating when PreviewScreen is active
@@ -169,7 +170,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
         backgroundColor: Colors.white,
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              size: 20,
+              color: Colors.grey,
+            ),
             onPressed: () =>
                 Navigator.of(context).pop({'home': true, 'tab': targetTab}),
           ),
@@ -331,10 +336,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ),
         onPressed: () {
           if (isBatchDownloading) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("⏳ Please wait for download to finish"),
-              ),
+            UIUtils.showSnackBar(
+              context,
+              "⏳ Please wait for download to finish",
             );
             return;
           }
@@ -370,12 +374,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   }
                 });
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "⚠️ Media file not found. Try downloading again.",
-                ),
-              ),
+            UIUtils.showSnackBar(
+              context,
+              "⚠️ Media file not found. Try downloading again.",
             );
           }
         },

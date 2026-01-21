@@ -5,11 +5,7 @@ class WebViewScreen extends StatefulWidget {
   final String title;
   final String url;
 
-  const WebViewScreen({
-    super.key,
-    required this.title,
-    required this.url,
-  });
+  const WebViewScreen({super.key, required this.title, required this.url});
 
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
@@ -90,19 +86,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.grey),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Colors.grey,
+              size: 20,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
           bottom: _isLoading
               ? PreferredSize(
-            preferredSize: const Size.fromHeight(2),
-            child: LinearProgressIndicator(
-              value: _progress,
-              backgroundColor: Colors.white,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-              minHeight: 2,
-            ),
-          )
+                  preferredSize: const Size.fromHeight(2),
+                  child: LinearProgressIndicator(
+                    value: _progress,
+                    backgroundColor: Colors.white,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Colors.blue,
+                    ),
+                    minHeight: 2,
+                  ),
+                )
               : null,
         ),
         body: WebViewWidget(controller: _controller),

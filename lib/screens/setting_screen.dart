@@ -33,7 +33,7 @@ class SettingsScreen extends StatelessWidget {
           leading: IconButton(
             icon: const Icon(
               Icons.arrow_back_ios_new,
-              size: 22,
+              size: 20,
               color: Colors.grey,
             ),
             onPressed: () {
@@ -131,7 +131,7 @@ class SettingsScreen extends StatelessWidget {
                     title: 'Terms & Conditions',
                     onTap: () => _openWebView(
                       context,
-                      'Terms of Use',
+                      'Terms & Conditions',
                       RemoteConfigService().termsUrl,
                     ),
                   ),

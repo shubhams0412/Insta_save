@@ -28,6 +28,7 @@ import 'package:InstSave/services/saved_post.dart';
 import 'package:InstSave/services/remote_config_service.dart';
 import 'package:InstSave/screens/sales_screen.dart';
 import 'package:InstSave/utils/constants.dart';
+import 'package:InstSave/utils/ui_utils.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/instagram_login_webview.dart';
@@ -1275,10 +1276,17 @@ class _HomeScreenState extends State<HomeScreen>
       MaterialPageRoute(builder: (context) => EditPostScreen(imagePath: path)),
     ).then((result) {
       _refreshGalleryDataSilently();
-      if (result is Map && result['rating'] == true) {
-        RatingService().showCustomRating(
-          RatingService().selectPicsSaveCountKey,
-        );
+
+      if (result is Map && result['home'] == true) {
+        if (mounted && result.containsKey('tab')) {
+          _tabController.animateTo(result['tab'] as int);
+        }
+
+        if (result['rating'] == true) {
+          RatingService().showCustomRating(
+            RatingService().selectPicsSaveCountKey,
+          );
+        }
       }
     });
   }
@@ -1289,19 +1297,12 @@ class _HomeScreenState extends State<HomeScreen>
       if (data.text!.contains("instagram.com/")) {
         _linkController.text = data.text!;
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("⚠️ Please copy a valid Instagram link"),
-          ),
-        );
+        UIUtils.showSnackBar(context, "⚠️ Please copy a valid Instagram link");
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "There’s nothing to paste. Please copy a valid link and try again.",
-          ),
-        ),
+      UIUtils.showSnackBar(
+        context,
+        "There’s nothing to paste. Please copy a valid link and try again.",
       );
     }
   }
@@ -1322,17 +1323,13 @@ class _HomeScreenState extends State<HomeScreen>
     String link = linkController.text.trim();
 
     if (!link.contains("instagram.com/")) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⚠️ Please enter a valid Instagram link")),
-      );
+      UIUtils.showSnackBar(context, "⚠️ Please enter a valid Instagram link");
       return;
     }
 
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("❌ No Internet Connection")));
+      UIUtils.showSnackBar(context, "❌ No Internet Connection");
       return;
     }
 
@@ -1351,10 +1348,9 @@ class _HomeScreenState extends State<HomeScreen>
         if (!success) {
           // User cancelled login or failed, so we stop here.
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("⚠️ Login required to download content"),
-              ),
+            UIUtils.showSnackBar(
+              context,
+              "⚠️ Login required to download content",
             );
           }
           return;
@@ -1489,27 +1485,20 @@ class _HomeScreenState extends State<HomeScreen>
     } on TimeoutException catch (_) {
       if (context.mounted) {
         Navigator.of(context).pop(); // Close the status dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "⌛ The server took too long to respond. Please try again.",
-            ),
-          ),
+        UIUtils.showSnackBar(
+          context,
+          "⌛ The server took too long to respond. Please try again.",
         );
       }
     } on SocketException catch (e) {
       if (context.mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("🌐 Connection Refused: ${e.message}")),
-        );
+        UIUtils.showSnackBar(context, "🌐 Connection Refused: ${e.message}");
       }
     } catch (e) {
       progressTimer?.cancel();
       if (context.mounted) Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
+      UIUtils.showSnackBar(context, "❌ Error: $e");
     }
   }
 

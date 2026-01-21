@@ -12,9 +12,11 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:InstSave/services/ad_service.dart'; // Import this
 import 'package:InstSave/utils/constants.dart';
+import 'package:InstSave/utils/ui_utils.dart';
 
 class RepostScreen extends StatefulWidget {
   final String imageUrl;
@@ -408,17 +410,25 @@ class _RepostScreenState extends State<RepostScreen>
         );
 
         if (uriString != null) {
-          await _instaChannel.invokeMethod('repostToInstagram', {
-            'uri': uriString,
-            'mediaType': mediaType,
-          });
+          try {
+            await _instaChannel.invokeMethod('repostToInstagram', {
+              'uri': uriString,
+              'mediaType': mediaType,
+            });
+          } catch (e) {
+            debugPrint(
+              "Instagram not found or share failed, opening share sheet: $e",
+            );
+            // Fallback: Use share_plus to open generic share sheet
+            await Share.shareXFiles([
+              XFile(pathToSend),
+            ], text: _captionController.text);
+          }
           // Navigation will happen in didChangeAppLifecycleState when user returns from Instagram
         }
       } on PlatformException catch (e) {
         debugPrint("Native Error: ${e.message}");
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Platform Error: ${e.message}")));
+        UIUtils.showSnackBar(context, "Platform Error: ${e.message}");
       } catch (e) {
         debugPrint("General Error: $e");
       } finally {
@@ -500,11 +510,20 @@ class _RepostScreenState extends State<RepostScreen>
   }
 
   Future<void> _deletePostFromList() async {
-    // 1. Stop playback immediately
+    // 1. Stop playback and remove from UI immediately to avoid "Bad state" errors
     if (_videoController != null) {
-      await _videoController!.pause();
-      await _videoController!.dispose();
-      _videoController = null;
+      final oldController = _videoController;
+      // Remove listener immediately so it doesn't trigger setState during cleanup
+      oldController?.removeListener(_videoListener);
+      setState(() {
+        _videoController = null;
+      });
+      try {
+        await oldController?.pause();
+        await oldController?.dispose();
+      } catch (e) {
+        debugPrint("Silent error during controller disposal: $e");
+      }
     }
 
     try {
@@ -538,23 +557,53 @@ class _RepostScreenState extends State<RepostScreen>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        // Prevent back if currently processing
+        if (_isReposting) return;
         Navigator.of(context).pop({'home': true, 'tab': targetTab});
       },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: _buildAppBar(targetTab),
-        body: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildMediaPreview(),
-              _buildToolbar(),
-              _buildCaptionSection(),
-              const SizedBox(height: 20),
-            ],
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor: Colors.white,
+            appBar: _buildAppBar(targetTab),
+            body: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMediaPreview(),
+                  _buildToolbar(),
+                  _buildCaptionSection(),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+            bottomNavigationBar: _buildRepostButton(),
           ),
-        ),
-        bottomNavigationBar: _buildRepostButton(),
+          if (_isReposting)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black45,
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white),
+                      SizedBox(height: 12),
+                      Text(
+                        "Preparing...",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -569,9 +618,15 @@ class _RepostScreenState extends State<RepostScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: Colors.grey),
-            onPressed: () =>
-                Navigator.of(context).pop({'home': true, 'tab': targetTab}),
+            icon: const Icon(
+              Icons.arrow_back_ios,
+              color: Colors.grey,
+              size: 20,
+            ),
+            onPressed: () {
+              if (_isReposting) return;
+              Navigator.of(context).pop({'home': true, 'tab': targetTab});
+            },
           ),
           if (widget.showHomeButton)
             IconButton(
@@ -581,6 +636,7 @@ class _RepostScreenState extends State<RepostScreen>
                 height: 24,
               ),
               onPressed: () {
+                if (_isReposting) return;
                 // Return to home and signal to show rating
                 Navigator.of(
                   context,
@@ -693,20 +749,6 @@ class _RepostScreenState extends State<RepostScreen>
                       ],
                     ),
                   ),
-                ),
-              ),
-            ),
-          if (_isReposting)
-            Container(
-              color: Colors.black45,
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 12),
-                    Text("Preparing...", style: TextStyle(color: Colors.white)),
-                  ],
                 ),
               ),
             ),
@@ -882,12 +924,7 @@ class _RepostScreenState extends State<RepostScreen>
                   Clipboard.setData(
                     ClipboardData(text: _captionController.text),
                   );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Caption copied to clipboard"),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  UIUtils.showSnackBar(context, "Caption copied to clipboard");
                 }
               },
               child: Container(
@@ -946,19 +983,15 @@ class _RepostScreenState extends State<RepostScreen>
               onTap: () async {
                 if (widget.showDeleteButton) {
                   // Entry from Collection (Home Screen Tab Bar): Show Toast
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Already saved to your In-App Collection"),
-                      duration: Duration(seconds: 2),
-                    ),
+                  UIUtils.showSnackBar(
+                    context,
+                    "Already saved to your In-App Collection",
                   );
                 } else {
                   // Entry from New Download: Show Notification
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Saved to your In-App Collection"),
-                      duration: Duration(seconds: 2),
-                    ),
+                  UIUtils.showSnackBar(
+                    context,
+                    "Saved to your In-App Collection",
                   );
                 }
 

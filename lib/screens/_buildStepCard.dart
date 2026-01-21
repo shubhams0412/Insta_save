@@ -55,7 +55,11 @@ class TutorialScreen extends StatelessWidget {
         elevation: 0,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.grey, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.grey,
+            size: 20,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
