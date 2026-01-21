@@ -1071,10 +1071,19 @@ class _HomeScreenState extends State<HomeScreen>
 
     AdService().handleSelectPicsAd(() async {
       try {
-        final permission = await PhotoManager.requestPermissionExtend();
-        if (!permission.isAuth) return;
+        // Use requestPermissionExtend() which is the modern standard for photo_manager.
+        // It returns the current state if already granted.
+        PermissionState permission =
+            await PhotoManager.requestPermissionExtend();
 
-        final albums = await PhotoManager.getAssetPathList(
+        if (permission != PermissionState.authorized &&
+            permission != PermissionState.limited) {
+          debugPrint("Permission not granted: $permission");
+          return;
+        }
+
+        // Fetch albums. For limited access, this should return the virtual 'Recent' album.
+        List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
           type: RequestType.common,
           filterOption: FilterOptionGroup(
             orders: [
@@ -1082,6 +1091,31 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
         );
+
+        // If albums is empty in limited access, it might be because the filter is too restrictive or
+        // the virtual album hasn't been populated yet. Try a simple fetch.
+        if (albums.isEmpty && permission == PermissionState.limited) {
+          albums = await PhotoManager.getAssetPathList(
+            type: RequestType.common,
+          );
+        }
+
+        if (albums.isEmpty) {
+          if (permission == PermissionState.limited) {
+            // Only prompt if we really can't find anything to show.
+            await PhotoManager.presentLimited();
+            albums = await PhotoManager.getAssetPathList(
+              type: RequestType.common,
+            );
+            if (albums.isEmpty) return;
+          } else {
+            if (mounted) {
+              UIUtils.showSnackBar(context, "No media found in your gallery.");
+            }
+            return;
+          }
+        }
+
         AssetPathEntity selectedAlbum = albums.first;
 
         List<AssetEntity> assets = await selectedAlbum.getAssetListRange(
@@ -1117,42 +1151,107 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                       const SizedBox(height: 12),
 
-                      /// Album Dropdown
-                      Container(
+                      /// Album Dropdown & Manage (for Limited Access)
+                      Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<AssetPathEntity>(
-                            value: selectedAlbum,
-                            icon: const Icon(
-                              Icons.keyboard_arrow_down,
-                              color: Colors.black,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<AssetPathEntity>(
+                                  value: selectedAlbum,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: Colors.black,
+                                  ),
+                                  dropdownColor: Colors.white,
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  items: albums.map((e) {
+                                    return DropdownMenuItem(
+                                      value: e,
+                                      child: Text(e.name),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) async {
+                                    if (val == null) return;
+                                    selectedAlbum = val;
+                                    assets = await selectedAlbum
+                                        .getAssetListRange(
+                                          start: 0,
+                                          end: 1000000,
+                                        );
+                                    setState(() {});
+                                  },
+                                ),
+                              ),
                             ),
-                            dropdownColor: Colors.white,
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            items: albums.map((e) {
-                              return DropdownMenuItem(
-                                value: e,
-                                child: Text(e.name),
-                              );
-                            }).toList(),
-                            onChanged: (val) async {
-                              if (val == null) return;
-                              selectedAlbum = val;
-                              assets = await selectedAlbum.getAssetListRange(
-                                start: 0,
-                                end: 1000000,
-                              );
-                              setState(() {});
-                            },
-                          ),
+                            // Show 'Add More' if permission is limited OR not fully authorized
+                            // (Handles cases where Android 14+ might return slightly different states
+                            // but still has limited picker enabled)
+                            if (permission != PermissionState.authorized) ...[
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.blue.withOpacity(0.1),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                ),
+                                onPressed: () async {
+                                  await PhotoManager.presentLimited();
+
+                                  // Refresh permission state to check if user switched to Full Access
+                                  permission =
+                                      await PhotoManager.requestPermissionExtend();
+
+                                  final reFetched =
+                                      await PhotoManager.getAssetPathList(
+                                        type: RequestType.common,
+                                        filterOption: FilterOptionGroup(
+                                          orders: [
+                                            const OrderOption(
+                                              type: OrderOptionType.createDate,
+                                              asc: false,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                  if (reFetched.isNotEmpty) {
+                                    albums.clear();
+                                    albums.addAll(reFetched);
+                                    selectedAlbum = albums.first;
+                                    assets = await selectedAlbum
+                                        .getAssetListRange(
+                                          start: 0,
+                                          end: 1000000,
+                                        );
+                                    setState(() {});
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.add_circle_outline,
+                                  size: 18,
+                                ),
+                                label: const Text("Add More"),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1262,6 +1361,14 @@ class _HomeScreenState extends State<HomeScreen>
             );
           },
         );
+      } catch (e) {
+        debugPrint("❌ Error in pickImageFromGallery: $e");
+        if (mounted) {
+          UIUtils.showSnackBar(
+            context,
+            "An error occurred while opening the gallery.",
+          );
+        }
       } finally {
         if (mounted) setState(() => _isOpeningGallery = false);
       }

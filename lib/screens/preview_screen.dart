@@ -47,6 +47,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     super.initState();
     _pageController = PageController();
     _initTempDir();
+    DownloadManager.instance.suppressNotifications = true;
 
     // 1. Listen for completion to Auto-Close dialog
     _downloadSubscription = DownloadManager.instance.onTaskCompleted.listen((
@@ -140,6 +141,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   @override
   void dispose() {
+    DownloadManager.instance.suppressNotifications = false;
     PreviewScreen.isProcessing = false; // Ensure flag is reset
     _downloadSubscription?.cancel();
     _pageController.dispose();
@@ -194,12 +196,15 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 builder: (context, child) {
                   final isBatchDownloading = DownloadManager.instance
                       .isBatchDownloading(widget.postUrl);
-                  final batchProgress = DownloadManager.instance
-                      .getBatchProgress(widget.postUrl);
+                  final tasks = DownloadManager.instance.activeTasks
+                      .where((t) => t.postUrl == widget.postUrl)
+                      .toList();
 
-                  // Consider download complete if progress is 100% OR no active tasks
+                  // Consider download complete if we have tasks and they are all done,
+                  // OR if there are no active tasks at all for this URL.
                   final isDownloadComplete =
-                      !isBatchDownloading || batchProgress >= 1.0;
+                      !isBatchDownloading && tasks.isNotEmpty ||
+                      (tasks.isEmpty && !PreviewScreen.isProcessing);
 
                   return Stack(
                     children: [
@@ -322,67 +327,70 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   Widget _buildNextButton(bool isBatchDownloading) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isBatchDownloading ? Colors.grey : Colors.black,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 50),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isBatchDownloading ? Colors.grey : Colors.black,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0,
           ),
-          elevation: 0,
-        ),
-        onPressed: () {
-          if (isBatchDownloading) {
-            UIUtils.showSnackBar(
-              context,
-              "⏳ Please wait for download to finish",
+          onPressed: () {
+            if (isBatchDownloading) {
+              UIUtils.showSnackBar(
+                context,
+                "⏳ Please wait for download to finish",
+              );
+              return;
+            }
+
+            final path = _getExpectedFilePath(
+              widget.mediaItems[_currentPage]['url']!,
+              _currentPage,
             );
-            return;
-          }
+            final thumbnail = widget.mediaItems[_currentPage]['thumbnail'];
 
-          final path = _getExpectedFilePath(
-            widget.mediaItems[_currentPage]['url']!,
-            _currentPage,
-          );
-          final thumbnail = widget.mediaItems[_currentPage]['thumbnail'];
-
-          if (File(path).existsSync()) {
-            Navigator.of(context)
-                .push(
-                  createSlideRoute(
-                    RepostScreen(
-                      imageUrl: path,
-                      username: widget.username,
-                      initialCaption: widget.caption,
-                      postUrl: widget.postUrl,
-                      localImagePath: path,
-                      showDeleteButton: false,
-                      showHomeButton: true,
-                      thumbnailUrl: thumbnail ?? path,
+            if (File(path).existsSync()) {
+              Navigator.of(context)
+                  .push(
+                    createSlideRoute(
+                      RepostScreen(
+                        imageUrl: path,
+                        username: widget.username,
+                        initialCaption: widget.caption,
+                        postUrl: widget.postUrl,
+                        localImagePath: path,
+                        showDeleteButton: false,
+                        showHomeButton: true,
+                        thumbnailUrl: thumbnail ?? path,
+                      ),
+                      direction: SlideFrom.right,
                     ),
-                    direction: SlideFrom.right,
-                  ),
-                )
-                .then((result) {
-                  if (result is Map && result['home'] == true) {
-                    if (mounted) {
-                      Navigator.of(context).pop(result);
+                  )
+                  .then((result) {
+                    if (result is Map && result['home'] == true) {
+                      if (mounted) {
+                        Navigator.of(context).pop(result);
+                      }
                     }
-                  }
-                });
-          } else {
-            UIUtils.showSnackBar(
-              context,
-              "⚠️ Media file not found. Try downloading again.",
-            );
-          }
-        },
-        child: Text(
-          isBatchDownloading ? "Downloading..." : "Next",
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  });
+            } else {
+              UIUtils.showSnackBar(
+                context,
+                "⚠️ Media file not found. Try downloading again.",
+              );
+            }
+          },
+          child: Text(
+            isBatchDownloading ? "Downloading..." : "Next",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
       ),
     );

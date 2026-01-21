@@ -9,20 +9,11 @@ import es.antonborri.home_widget.HomeWidgetProvider
 class HomeWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_layout).apply {
+            val views = RemoteViews(context.packageName, R.layout.home_widget).apply {
                 
-                // 1. Import from Insta Intent
-                val importIntent = android.content.Intent(context, MainActivity::class.java).apply {
-                    action = "ACTION_WIDGET_OPEN_INSTA"
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                }
-                val importPendingIntent = android.app.PendingIntent.getActivity(
-                    context,
-                    1001,
-                    importIntent,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                )
-                setOnClickPendingIntent(R.id.btn_import_insta, importPendingIntent)
+                // btn_import_insta is not in home_widget, so we omit its click handler to avoid logic errors
+                // or we can map it to something else if needed.
+
 
                 // 2. Repost/Gallery Intent
                 val repostIntent = android.content.Intent(context, MainActivity::class.java).apply {

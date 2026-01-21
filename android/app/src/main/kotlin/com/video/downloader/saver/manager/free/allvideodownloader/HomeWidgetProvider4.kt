@@ -9,7 +9,7 @@ import es.antonborri.home_widget.HomeWidgetProvider
 class HomeWidgetProvider4 : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_layout_4).apply {
+            val views = RemoteViews(context.packageName, R.layout.widget_layout_3).apply {
                 
                 // 1. Import from Insta Intent
                 val importIntent = android.content.Intent(context, MainActivity::class.java).apply {

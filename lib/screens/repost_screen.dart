@@ -970,116 +970,126 @@ class _RepostScreenState extends State<RepostScreen>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0xFFEEEEEE), width: 1)),
       ),
-      child: Row(
-        children: [
-          // 1. Save Button
-          Expanded(
-            child: GestureDetector(
-              onTap: () async {
-                if (widget.showDeleteButton) {
-                  // Entry from Collection (Home Screen Tab Bar): Show Toast
-                  UIUtils.showSnackBar(
-                    context,
-                    "Already saved to your In-App Collection",
-                  );
-                } else {
-                  // Entry from New Download: Show Notification
-                  UIUtils.showSnackBar(
-                    context,
-                    "Saved to your In-App Collection",
-                  );
-                }
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              // 1. Save Button
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    if (widget.showDeleteButton) {
+                      // Entry from Collection (Home Screen Tab Bar): Show Toast
+                      UIUtils.showSnackBar(
+                        context,
+                        "Already saved to your In-App Collection",
+                      );
+                    } else {
+                      // Entry from New Download: Show Notification
+                      UIUtils.showSnackBar(
+                        context,
+                        "Saved to your In-App Collection",
+                      );
+                    }
 
-                if (mounted) {
-                  // Check if this is from "Select Pics & Repost" flow
-                  final bool isDeviceMedia = widget.postUrl == "device_media";
+                    if (mounted) {
+                      // Check if this is from "Select Pics & Repost" flow
+                      final bool isDeviceMedia =
+                          widget.postUrl == "device_media";
 
-                  Navigator.of(context).pop({
-                    'home': true,
-                    'tab': targetTab,
-                    'rating':
-                        isDeviceMedia, // Trigger rating for device media saves
-                  });
-                }
-              },
-              child: Container(
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black, width: 1),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.download_rounded, color: Colors.black, size: 22),
-                    SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        "Save to Collection",
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Navigator.of(context).pop({
+                        'home': true,
+                        'tab': targetTab,
+                        'rating':
+                            isDeviceMedia, // Trigger rating for device media saves
+                      });
+                    }
+                  },
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.black, width: 1),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // 2. Repost Button
-          Expanded(
-            child: GestureDetector(
-              onTap: _isReposting ? null : _handleRepostAction,
-              child: Container(
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: _isReposting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.repeat_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              "Repost",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.download_rounded,
+                          color: Colors.black,
+                          size: 22,
                         ),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            "Save to Collection",
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              // 2. Repost Button
+              Expanded(
+                child: GestureDetector(
+                  onTap: _isReposting ? null : _handleRepostAction,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: _isReposting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.repeat_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  "Repost",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

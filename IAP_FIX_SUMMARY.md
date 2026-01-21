@@ -126,8 +126,8 @@ IAP:   Price: Free  ← WRONG!
 ```
 IAP: Products found: 2
 IAP: Found 2 products with ID: com.video.downloader.saver.manager.week
-IAP:   - Instant Save Pro – Weekly Access: Free
-IAP:   - Instant Save Pro – Weekly Access: ₹180.00
+IAP:   - InstSave Save Pro – Weekly Access: Free
+IAP:   - InstSave Save Pro – Weekly Access: ₹180.00
 IAP: Selected paid product: ₹180.00  ← CORRECT!
 ```
 

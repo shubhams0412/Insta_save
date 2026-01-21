@@ -42,6 +42,9 @@ class DownloadManager extends ChangeNotifier {
   final List<DownloadTask> _activeTasks = [];
   List<DownloadTask> get activeTasks => _activeTasks;
 
+  // Track whether to show notifications
+  bool suppressNotifications = false;
+
   // ✅ NEW: Stream to notify Home Screen only when a download finishes
   final StreamController<void> _completionController =
       StreamController.broadcast();
@@ -53,6 +56,9 @@ class DownloadManager extends ChangeNotifier {
     String caption,
     String postUrl,
   ) {
+    // 1. Remove any stale tasks for this postUrl to prevent progress mixing
+    _activeTasks.removeWhere((t) => t.postUrl == postUrl);
+
     for (int i = 0; i < mediaItems.length; i++) {
       final item = mediaItems[i];
       String type = item['type'] ?? 'image';
@@ -128,6 +134,10 @@ class DownloadManager extends ChangeNotifier {
     task.localPath = localPath;
     task.progress.value = 1.0;
     task.isCompleted.value = true;
+
+    // 🔥 FIRE COMPLETION EVENT NOW (Start reloading Home Screen DB)
+    _completionController.add(null);
+
     notifyListeners();
 
     // 1. Save to History
@@ -136,28 +146,29 @@ class DownloadManager extends ChangeNotifier {
     // 2. Notify UI: Show 100% progress
     notifyListeners();
 
-    // 3. 🔥 FIRE COMPLETION EVENT NOW (Start reloading Home Screen DB)
-    // We do this BEFORE removing the task so there is no gap.
-    _completionController.add(null);
-
-    // 4. Wait long enough for Home Screen to reload (e.g., 2 seconds)
-    // During this time, the item exists in BOTH lists.
-    await Future.delayed(const Duration(seconds: 2));
-
-    // 5. Remove from active list
-    _activeTasks.remove(task);
-    notifyListeners();
-
-    // 6. 🔥 Fire Notification if entire batch is complete
+    // 4. Fire Notification & Cleanup if entire batch is complete
     final isAnyStillDownloading = _activeTasks.any(
       (t) => t.postUrl == task.postUrl && !t.isCompleted.value,
     );
+
     if (!isAnyStillDownloading) {
-      NotificationService().showNotification(
-        id: task.postUrl.hashCode,
-        title: "Preview Ready!",
-        body: "Your media preview is now ready to view",
-      );
+      // Notify UI one last time that everything is 100%
+      notifyListeners();
+
+      // Show notification if needed
+      if (!suppressNotifications) {
+        NotificationService().showNotification(
+          id: task.postUrl.hashCode,
+          title: "Preview Ready!",
+          body: "Your media preview is now ready to view",
+        );
+      }
+
+      // Cleanup the whole batch after a delay
+      Future.delayed(const Duration(seconds: 3), () {
+        _activeTasks.removeWhere((t) => t.postUrl == task.postUrl);
+        notifyListeners();
+      });
     }
   }
 
@@ -204,7 +215,7 @@ class DownloadManager extends ChangeNotifier {
 
   double getBatchProgress(String postUrl) {
     final tasks = _activeTasks.where((t) => t.postUrl == postUrl).toList();
-    if (tasks.isEmpty) return 1.0;
+    if (tasks.isEmpty) return 0.0;
 
     double total = 0;
     for (var t in tasks) {
