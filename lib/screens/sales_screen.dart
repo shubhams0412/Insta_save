@@ -152,7 +152,8 @@ class _SalesScreenState extends State<SalesScreen> {
                             children: [
                               // HEADER
                               Text(
-                                _config?.titleText ?? 'InstSave Premium',
+                                _config?.titleText ??
+                                    'Video Downloader Premium',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: _config?.titleColor ?? Colors.white,

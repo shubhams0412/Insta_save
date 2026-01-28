@@ -272,7 +272,7 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
           Image.asset('assets/images/placeholder.png', width: 50, height: 50),
           const SizedBox(height: 14),
           const Text(
-            "You haven't shared\nany posts yet.",
+            "You haven't shared\nany media yet.",
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 18,

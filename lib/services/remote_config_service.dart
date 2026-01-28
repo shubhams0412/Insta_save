@@ -144,7 +144,7 @@ class RemoteConfigService {
     return {
       "sales_screen_config": jsonEncode({
         "title": {
-          "text": "InstSave Premium",
+          "text": "Video Downloader Premium",
           "textSize": 28,
           "textColor": "#FFFFFF",
         },

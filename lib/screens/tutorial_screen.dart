@@ -69,7 +69,7 @@ class _TutorialDialogState extends State<TutorialDialog> {
       'step': '03',
       'title': 'Paste Link',
       'desc':
-          'Return to InstSave Saver. It auto-detects the link, just tap "Allow paste".',
+          'Return to Video Downloader. It auto-detects the link, just tap "Allow paste".',
     },
     {
       'image': 'assets/images/tutorial_04.png',

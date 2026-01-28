@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isOpeningGallery = false;
 
   static const String _apiBaseUrl = kReleaseMode
-      ? "https://api.instasave.turbofast.io/" // TODO: Replace with actual release URL
+      ? "https://api.instasave.turbofast.io/"
       : "http://13.200.64.163:9081/";
 
   StreamSubscription? _downloadSubscription;
@@ -448,11 +448,21 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               // Arrow
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white,
-                size: 20,
-              ),
+              // Arrow
+              _isOpeningGallery
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white,
+                      size: 20,
+                    ),
             ],
           ),
         ),
@@ -1069,310 +1079,328 @@ class _HomeScreenState extends State<HomeScreen>
     if (_isOpeningGallery) return;
     setState(() => _isOpeningGallery = true);
 
-    AdService().handleSelectPicsAd(() async {
-      try {
-        // Use requestPermissionExtend() which is the modern standard for photo_manager.
-        // It returns the current state if already granted.
-        PermissionState permission =
-            await PhotoManager.requestPermissionExtend();
+    try {
+      await AdService().handleSelectPicsAd(() async {
+        try {
+          // Use requestPermissionExtend() which is the modern standard for photo_manager.
+          // It returns the current state if already granted.
+          PermissionState permission =
+              await PhotoManager.requestPermissionExtend();
 
-        if (permission != PermissionState.authorized &&
-            permission != PermissionState.limited) {
-          debugPrint("Permission not granted: $permission");
-          return;
-        }
+          if (permission != PermissionState.authorized &&
+              permission != PermissionState.limited) {
+            debugPrint("Permission not granted: $permission");
+            return;
+          }
 
-        // Fetch albums. For limited access, this should return the virtual 'Recent' album.
-        List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-          type: RequestType.common,
-          filterOption: FilterOptionGroup(
-            orders: [
-              const OrderOption(type: OrderOptionType.createDate, asc: false),
-            ],
-          ),
-        );
-
-        // If albums is empty in limited access, it might be because the filter is too restrictive or
-        // the virtual album hasn't been populated yet. Try a simple fetch.
-        if (albums.isEmpty && permission == PermissionState.limited) {
-          albums = await PhotoManager.getAssetPathList(
+          // Fetch albums. For limited access, this should return the virtual 'Recent' album.
+          List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
             type: RequestType.common,
+            filterOption: FilterOptionGroup(
+              orders: [
+                const OrderOption(type: OrderOptionType.createDate, asc: false),
+              ],
+            ),
           );
-        }
 
-        if (albums.isEmpty) {
-          if (permission == PermissionState.limited) {
-            // Only prompt if we really can't find anything to show.
-            await PhotoManager.presentLimited();
+          // If albums is empty in limited access, it might be because the filter is too restrictive or
+          // the virtual album hasn't been populated yet. Try a simple fetch.
+          if (albums.isEmpty && permission == PermissionState.limited) {
             albums = await PhotoManager.getAssetPathList(
               type: RequestType.common,
             );
-            if (albums.isEmpty) return;
-          } else {
-            if (mounted) {
-              UIUtils.showSnackBar(context, "No media found in your gallery.");
-            }
-            return;
           }
-        }
 
-        AssetPathEntity selectedAlbum = albums.first;
+          if (albums.isEmpty) {
+            if (permission == PermissionState.limited) {
+              // Only prompt if we really can't find anything to show.
+              await PhotoManager.presentLimited();
+              albums = await PhotoManager.getAssetPathList(
+                type: RequestType.common,
+              );
+              if (albums.isEmpty) return;
+            } else {
+              if (mounted) {
+                UIUtils.showSnackBar(
+                  context,
+                  "No media found in your gallery.",
+                );
+              }
+              return;
+            }
+          }
 
-        List<AssetEntity> assets = await selectedAlbum.getAssetListRange(
-          start: 0,
-          end: 1000000,
-        );
+          AssetPathEntity selectedAlbum = albums.first;
 
-        if (!mounted) return;
+          List<AssetEntity> assets = await selectedAlbum.getAssetListRange(
+            start: 0,
+            end: 1000000,
+          );
 
-        await showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (_) {
-            return SizedBox(
-              height: MediaQuery.of(context).size.height * 0.65,
-              child: StatefulBuilder(
-                builder: (context, setState) {
-                  return Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      // Drag Handle
-                      Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
+          if (!mounted) return;
+
+          if (mounted) {
+            setState(() {
+              _isOpeningGallery = false;
+            });
+          }
+
+          await showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.white,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            builder: (_) {
+              return SizedBox(
+                height: MediaQuery.of(context).size.height * 0.65,
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    return Column(
+                      children: [
+                        const SizedBox(height: 12),
+                        // Drag Handle
+                        Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      /// Album Dropdown & Manage (for Limited Access)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<AssetPathEntity>(
-                                  value: selectedAlbum,
-                                  icon: const Icon(
-                                    Icons.keyboard_arrow_down,
-                                    color: Colors.black,
-                                  ),
-                                  dropdownColor: Colors.white,
-                                  style: const TextStyle(
-                                    color: Colors.black,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  items: albums.map((e) {
-                                    return DropdownMenuItem(
-                                      value: e,
-                                      child: Text(e.name),
-                                    );
-                                  }).toList(),
-                                  onChanged: (val) async {
-                                    if (val == null) return;
-                                    selectedAlbum = val;
-                                    assets = await selectedAlbum
-                                        .getAssetListRange(
-                                          start: 0,
-                                          end: 1000000,
-                                        );
-                                    setState(() {});
-                                  },
+                        /// Album Dropdown & Manage (for Limited Access)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
                                 ),
-                              ),
-                            ),
-                            // Show 'Add More' if permission is limited OR not fully authorized
-                            // (Handles cases where Android 14+ might return slightly different states
-                            // but still has limited picker enabled)
-                            if (permission != PermissionState.authorized) ...[
-                              const SizedBox(width: 8),
-                              TextButton.icon(
-                                style: TextButton.styleFrom(
-                                  backgroundColor: Colors.blue.withOpacity(0.1),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(15),
-                                  ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(15),
                                 ),
-                                onPressed: () async {
-                                  await PhotoManager.presentLimited();
-
-                                  // Refresh permission state to check if user switched to Full Access
-                                  permission =
-                                      await PhotoManager.requestPermissionExtend();
-
-                                  final reFetched =
-                                      await PhotoManager.getAssetPathList(
-                                        type: RequestType.common,
-                                        filterOption: FilterOptionGroup(
-                                          orders: [
-                                            const OrderOption(
-                                              type: OrderOptionType.createDate,
-                                              asc: false,
-                                            ),
-                                          ],
-                                        ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<AssetPathEntity>(
+                                    value: selectedAlbum,
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down,
+                                      color: Colors.black,
+                                    ),
+                                    dropdownColor: Colors.white,
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    items: albums.map((e) {
+                                      return DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e.name),
                                       );
-
-                                  if (reFetched.isNotEmpty) {
-                                    albums.clear();
-                                    albums.addAll(reFetched);
-                                    selectedAlbum = albums.first;
-                                    assets = await selectedAlbum
-                                        .getAssetListRange(
-                                          start: 0,
-                                          end: 1000000,
-                                        );
-                                    setState(() {});
-                                  }
-                                },
-                                icon: const Icon(
-                                  Icons.add_circle_outline,
-                                  size: 18,
-                                ),
-                                label: const Text("Add More"),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      Expanded(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.all(2),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                crossAxisSpacing: 2,
-                                mainAxisSpacing: 2,
-                              ),
-                          itemCount: assets.length + 1,
-                          itemBuilder: (_, i) {
-                            /// Camera Button
-                            if (i == 0) {
-                              return GestureDetector(
-                                onTap: () async {
-                                  final XFile? file = await ImagePicker()
-                                      .pickImage(source: ImageSource.camera);
-
-                                  if (file != null && mounted) {
-                                    Navigator.pop(context);
-                                    _openEditor(file.path);
-                                  }
-                                },
-                                child: Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.black54,
-                                    size: 30,
+                                    }).toList(),
+                                    onChanged: (val) async {
+                                      if (val == null) return;
+                                      selectedAlbum = val;
+                                      assets = await selectedAlbum
+                                          .getAssetListRange(
+                                            start: 0,
+                                            end: 1000000,
+                                          );
+                                      setState(() {});
+                                    },
                                   ),
                                 ),
-                              );
-                            }
-
-                            final asset = assets[i - 1];
-
-                            return FutureBuilder<Uint8List?>(
-                              future: asset.thumbnailDataWithSize(
-                                const ThumbnailSize(300, 300),
                               ),
-                              builder: (_, snap) {
-                                if (!snap.hasData) {
-                                  return Container(color: Colors.grey[100]);
-                                }
+                              // Show 'Add More' if permission is limited OR not fully authorized
+                              // (Handles cases where Android 14+ might return slightly different states
+                              // but still has limited picker enabled)
+                              if (permission != PermissionState.authorized) ...[
+                                const SizedBox(width: 8),
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    backgroundColor: Colors.blue.withOpacity(
+                                      0.1,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    await PhotoManager.presentLimited();
 
+                                    // Refresh permission state to check if user switched to Full Access
+                                    permission =
+                                        await PhotoManager.requestPermissionExtend();
+
+                                    final reFetched =
+                                        await PhotoManager.getAssetPathList(
+                                          type: RequestType.common,
+                                          filterOption: FilterOptionGroup(
+                                            orders: [
+                                              const OrderOption(
+                                                type:
+                                                    OrderOptionType.createDate,
+                                                asc: false,
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                    if (reFetched.isNotEmpty) {
+                                      albums.clear();
+                                      albums.addAll(reFetched);
+                                      selectedAlbum = albums.first;
+                                      assets = await selectedAlbum
+                                          .getAssetListRange(
+                                            start: 0,
+                                            end: 1000000,
+                                          );
+                                      setState(() {});
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.add_circle_outline,
+                                    size: 18,
+                                  ),
+                                  label: const Text("Add More"),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Expanded(
+                          child: GridView.builder(
+                            padding: const EdgeInsets.all(2),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 2,
+                                  mainAxisSpacing: 2,
+                                ),
+                            itemCount: assets.length + 1,
+                            itemBuilder: (_, i) {
+                              /// Camera Button
+                              if (i == 0) {
                                 return GestureDetector(
                                   onTap: () async {
-                                    final file = await asset.file;
-                                    if (file == null) return;
+                                    final XFile? file = await ImagePicker()
+                                        .pickImage(source: ImageSource.camera);
 
-                                    Navigator.pop(context);
-                                    _openEditor(file.path);
+                                    if (file != null && mounted) {
+                                      Navigator.pop(context);
+                                      _openEditor(file.path);
+                                    }
                                   },
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Image.memory(
-                                        snap.data!,
-                                        fit: BoxFit.cover,
-                                      ),
+                                  child: Container(
+                                    color: Colors.grey[200],
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.black54,
+                                      size: 30,
+                                    ),
+                                  ),
+                                );
+                              }
 
-                                      /// Video Overlay
-                                      if (asset.type == AssetType.video)
-                                        Align(
-                                          alignment: Alignment.bottomRight,
-                                          child: Container(
-                                            margin: const EdgeInsets.all(4),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withOpacity(
-                                                0.7,
+                              final asset = assets[i - 1];
+
+                              return FutureBuilder<Uint8List?>(
+                                future: asset.thumbnailDataWithSize(
+                                  const ThumbnailSize(300, 300),
+                                ),
+                                builder: (_, snap) {
+                                  if (!snap.hasData) {
+                                    return Container(color: Colors.grey[100]);
+                                  }
+
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      final file = await asset.file;
+                                      if (file == null) return;
+
+                                      Navigator.pop(context);
+                                      _openEditor(file.path);
+                                    },
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Image.memory(
+                                          snap.data!,
+                                          fit: BoxFit.cover,
+                                        ),
+
+                                        /// Video Overlay
+                                        if (asset.type == AssetType.video)
+                                          Align(
+                                            alignment: Alignment.bottomRight,
+                                            child: Container(
+                                              margin: const EdgeInsets.all(4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(
+                                                  0.7,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
                                               ),
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              _formatDuration(
-                                                asset.videoDuration,
-                                              ),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w500,
+                                              child: Text(
+                                                _formatDuration(
+                                                  asset.videoDuration,
+                                                ),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            );
-                          },
+                                      ],
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            );
-          },
-        );
-      } catch (e) {
-        debugPrint("❌ Error in pickImageFromGallery: $e");
-        if (mounted) {
-          UIUtils.showSnackBar(
-            context,
-            "An error occurred while opening the gallery.",
+                      ],
+                    );
+                  },
+                ),
+              );
+            },
           );
+        } catch (e) {
+          debugPrint("❌ Error in pickImageFromGallery: $e");
+          if (mounted) {
+            UIUtils.showSnackBar(
+              context,
+              "An error occurred while opening the gallery.",
+            );
+          }
+        } finally {
+          if (mounted) setState(() => _isOpeningGallery = false);
         }
-      } finally {
-        if (mounted) setState(() => _isOpeningGallery = false);
-      }
-    });
+      });
+    } catch (e) {
+      debugPrint("Error initializing gallery flow: $e");
+      if (mounted) setState(() => _isOpeningGallery = false);
+    }
   }
 
   void _openEditor(String path) {

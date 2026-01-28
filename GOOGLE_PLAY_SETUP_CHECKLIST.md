@@ -22,7 +22,7 @@ This error means Google Play cannot complete the purchase because the product is
 ### Step 1: Verify Product Configuration
 
 1. Go to [Google Play Console](https://play.google.com/console)
-2. Select your app: **InstSave Save** (com.video.downloader.saver.manager.free.allvideodownloader)
+2. Select your app: **Video Downloader Save** (com.video.downloader.saver.manager.free.allvideodownloader)
 3. Navigate to **Monetize** → **Subscriptions** (or **In-app products**)
 4. Find product: `com.video.downloader.saver.manager.week`
 
