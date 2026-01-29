@@ -108,7 +108,7 @@ class DownloadManager extends ChangeNotifier {
           notifyListeners(); // 🔥 Notify UI for progress bar updates
         },
         onDone: () async {
-          await file.writeAsBytes(bytes);
+          await file.writeAsBytes(bytes, flush: true);
           await SaverGallery.saveFile(
             filePath: filePath,
             fileName: fileName,
@@ -135,13 +135,13 @@ class DownloadManager extends ChangeNotifier {
     task.progress.value = 1.0;
     task.isCompleted.value = true;
 
-    // 🔥 FIRE COMPLETION EVENT NOW (Start reloading Home Screen DB)
+    // 1. Save to History
+    await _saveToHistory(task);
+
+    // 🔥 FIRE COMPLETION EVENT NOW (Start reloading Home Screen DB after it's actually saved)
     _completionController.add(null);
 
     notifyListeners();
-
-    // 1. Save to History
-    await _saveToHistory(task);
 
     // 2. Notify UI: Show 100% progress
     notifyListeners();
@@ -165,8 +165,11 @@ class DownloadManager extends ChangeNotifier {
       }
 
       // Cleanup the whole batch after a delay
-      Future.delayed(const Duration(seconds: 3), () {
+      Future.delayed(const Duration(milliseconds: 1500), () {
         _activeTasks.removeWhere((t) => t.postUrl == task.postUrl);
+        _completionController.add(
+          null,
+        ); // 🔥 Refresh one last time after cleanup
         notifyListeners();
       });
     }

@@ -148,9 +148,16 @@ class _PreviewScreenState extends State<PreviewScreen> {
     super.dispose();
   }
 
-  String _getExpectedFilePath(String url, int index) {
+  bool _isItemVideo(Map<String, String> item) {
+    final type = item['type'];
+    final url = item['url'] ?? '';
+    return type == 'video' || url.contains('.mp4');
+  }
+
+  String _getExpectedFilePath(Map<String, String> item, int index) {
     if (_tempPath == null) return "";
-    final isVideo = url.contains('.mp4');
+    final url = item['url'] ?? "";
+    final isVideo = _isItemVideo(item);
     final fileName = "insta_${url.hashCode}_$index.${isVideo ? 'mp4' : 'jpg'}";
     return "$_tempPath/$fileName";
   }
@@ -159,7 +166,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
   Widget build(BuildContext context) {
     // Determine target tab based on the current page's media type
     final currentItem = widget.mediaItems[_currentPage];
-    final bool isVideo = currentItem['url']?.contains('.mp4') ?? false;
+    final bool isVideo = _isItemVideo(currentItem);
     final int targetTab = isVideo ? 1 : 0;
 
     return PopScope(
@@ -234,9 +241,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
       itemCount: widget.mediaItems.length,
       onPageChanged: (index) => setState(() => _currentPage = index),
       itemBuilder: (context, index) {
-        final itemUrl = widget.mediaItems[index]['url']!;
-        final thumbnail = widget.mediaItems[index]['thumbnail'];
-        final expectedPath = _getExpectedFilePath(itemUrl, index);
+        final item = widget.mediaItems[index];
+        final itemUrl = item['url']!;
+        final thumbnail = item['thumbnail'];
+        final expectedPath = _getExpectedFilePath(item, index);
         final file = File(expectedPath);
 
         // 1. Check Local File
@@ -350,11 +358,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
               return;
             }
 
-            final path = _getExpectedFilePath(
-              widget.mediaItems[_currentPage]['url']!,
-              _currentPage,
-            );
-            final thumbnail = widget.mediaItems[_currentPage]['thumbnail'];
+            final item = widget.mediaItems[_currentPage];
+            final path = _getExpectedFilePath(item, _currentPage);
+            final thumbnail = item['thumbnail'];
 
             if (File(path).existsSync()) {
               Navigator.of(context)
@@ -458,8 +464,9 @@ class _LocalMediaViewerState extends State<LocalMediaViewer> {
         throw Exception('Video file is empty');
       }
 
-      // Small delay to ensure file is fully written
-      await Future.delayed(const Duration(milliseconds: 200));
+      // ⏳ Increase delay to ensure OS has fully released the file handle
+      // Especially on some Android devices after a fresh download
+      await Future.delayed(const Duration(milliseconds: 500));
 
       if (_isDisposed || !mounted) return;
 

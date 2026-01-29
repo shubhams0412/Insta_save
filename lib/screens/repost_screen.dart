@@ -622,8 +622,10 @@ class _RepostScreenState extends State<RepostScreen>
               size: 20,
             ),
             onPressed: () {
-              if (_isReposting) return;
-              Navigator.of(context).pop({'home': true, 'tab': targetTab});
+              Navigator.of(context).pop();
+
+              // if (_isReposting) return;
+              // Navigator.of(context).pop({'home': true, 'tab': targetTab});
             },
           ),
           if (widget.showHomeButton)

@@ -320,7 +320,8 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
                     postUrl: post.postUrl,
                     localImagePath: post.localPath,
                     showDeleteButton: true,
-                    thumbnailUrl: postMap['thumbPath'] as String,
+                    thumbnailUrl:
+                        (postMap['thumbPath'] as String?) ?? post.localPath,
                   ),
                   direction: SlideFrom.bottom,
                 ),
