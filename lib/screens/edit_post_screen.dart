@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:InstSave/screens/repost_screen.dart';
-import 'package:InstSave/services/navigation_helper.dart';
-import 'package:InstSave/services/saved_post.dart';
+import 'package:insta_save/screens/repost_screen.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/saved_post.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:InstSave/utils/ui_utils.dart';
+import 'package:insta_save/utils/ui_utils.dart';
 
 class EditPostScreen extends StatefulWidget {
   final String imagePath;

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 class HomeWidgetService {
@@ -17,7 +18,7 @@ class HomeWidgetService {
         iOSName: 'HomeWidget',
       );
     } catch (e) {
-      print("Error Updating Widget: $e");
+      debugPrint("Error Updating Widget: $e");
     }
   }
 

@@ -3,14 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-import 'package:InstSave/screens/rating_screen.dart';
-import 'package:InstSave/screens/home_screen.dart'; // Renamed for consistency (was home_screen.dart)
-import 'package:InstSave/screens/intro_screen.dart';
-import 'package:InstSave/services/remote_config_service.dart';
-import 'package:InstSave/services/ad_service.dart';
-import 'package:InstSave/services/notification_service.dart';
-import 'package:InstSave/services/iap_service.dart';
-import 'package:InstSave/utils/constants.dart';
+import 'package:insta_save/screens/rating_screen.dart';
+import 'package:insta_save/screens/home_screen.dart'; // Renamed for consistency (was home_screen.dart)
+import 'package:insta_save/screens/intro_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/ad_service.dart';
+import 'package:insta_save/services/notification_service.dart';
+import 'package:insta_save/services/iap_service.dart';
+import 'package:insta_save/utils/constants.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -126,7 +126,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: Constants.AppName,
+      title: Constants.appName,
       debugShowCheckedModeBanner: false,
 
       // 4. Proper Material 3 Theme Configuration

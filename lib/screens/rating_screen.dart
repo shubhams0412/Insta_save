@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:InstSave/screens/home_screen.dart';
-import 'package:InstSave/services/remote_config_service.dart';
+import 'package:insta_save/screens/home_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
 
 class ReviewsScreen extends StatefulWidget {
   const ReviewsScreen({super.key});
@@ -180,7 +180,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFE700A8).withOpacity(0.3),
+                        color: const Color(0xFFE700A8).withValues(alpha: 0.3),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),

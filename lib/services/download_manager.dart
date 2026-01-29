@@ -6,9 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saver_gallery/saver_gallery.dart';
-import 'package:InstSave/services/saved_post.dart';
-import 'package:InstSave/services/notification_service.dart';
-import 'package:InstSave/utils/constants.dart';
+import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/services/notification_service.dart';
+import 'package:insta_save/utils/constants.dart';
 
 class DownloadTask {
   final String id;
@@ -113,12 +113,12 @@ class DownloadManager extends ChangeNotifier {
             filePath: filePath,
             fileName: fileName,
             skipIfExists: true,
-            androidRelativePath: 'Pictures/${Constants.AppName}',
+            androidRelativePath: 'Pictures/${Constants.appName}',
           );
           _completeTask(task, filePath);
         },
         onError: (e) {
-          print("Download Error: $e");
+          debugPrint("Download Error: $e");
           _activeTasks.remove(task);
           notifyListeners();
         },

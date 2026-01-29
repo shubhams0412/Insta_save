@@ -11,29 +11,29 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:InstSave/services/ad_service.dart';
-import 'package:InstSave/services/rating_service.dart';
-import 'package:InstSave/services/notification_service.dart';
-import 'package:InstSave/services/iap_service.dart';
+import 'package:insta_save/services/ad_service.dart';
+import 'package:insta_save/services/rating_service.dart';
+import 'package:insta_save/services/notification_service.dart';
+import 'package:insta_save/services/iap_service.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-import 'package:InstSave/screens/all_media_screen.dart';
-import 'package:InstSave/screens/edit_post_screen.dart';
-import 'package:InstSave/screens/preview_screen.dart';
-import 'package:InstSave/screens/repost_screen.dart';
-import 'package:InstSave/screens/setting_screen.dart';
-import 'package:InstSave/services/download_manager.dart';
-import 'package:InstSave/services/navigation_helper.dart';
-import 'package:InstSave/services/saved_post.dart';
-import 'package:InstSave/services/remote_config_service.dart';
-import 'package:InstSave/screens/sales_screen.dart';
-import 'package:InstSave/utils/constants.dart';
-import 'package:InstSave/utils/ui_utils.dart';
+import 'package:insta_save/screens/all_media_screen.dart';
+import 'package:insta_save/screens/edit_post_screen.dart';
+import 'package:insta_save/screens/preview_screen.dart';
+import 'package:insta_save/screens/repost_screen.dart';
+import 'package:insta_save/screens/setting_screen.dart';
+import 'package:insta_save/services/download_manager.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/screens/sales_screen.dart';
+import 'package:insta_save/utils/constants.dart';
+import 'package:insta_save/utils/ui_utils.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/instagram_login_webview.dart';
 import '../widgets/status_dialog.dart';
-import '_buildStepCard.dart';
+import 'tutorial_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final int initialTabIndex;
@@ -56,7 +56,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   List<Map<String, dynamic>>? _separatedMedia;
   bool _isLoadingMedia = true;
-  bool _isLoggedIn = true;
   bool _isOpeningGallery = false;
 
   static const String _apiBaseUrl = kReleaseMode
@@ -110,9 +109,6 @@ class _HomeScreenState extends State<HomeScreen>
     // Check for Widget Actions
     _initWidgetListener();
 
-    // Check Instagram login status
-    _checkLoginStatus();
-
     // Request notification permission when user reaches home for the first time
     _requestNotificationPermission();
   }
@@ -124,15 +120,6 @@ class _HomeScreenState extends State<HomeScreen>
     if (!alreadyAsked) {
       await NotificationService().requestPermissions();
       await prefs.setBool('isNotificationPermissionAsked', true);
-    }
-  }
-
-  Future<void> _checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
-      });
     }
   }
 
@@ -316,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen>
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       title: const Text(
-        Constants.AppName,
+        Constants.appName,
         style: TextStyle(
           fontFamily: "Lobster",
           fontSize: 36,
@@ -971,7 +958,7 @@ class _HomeScreenState extends State<HomeScreen>
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+            colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
           ),
         ),
         child: Text(
@@ -1224,8 +1211,8 @@ class _HomeScreenState extends State<HomeScreen>
                                 const SizedBox(width: 8),
                                 TextButton.icon(
                                   style: TextButton.styleFrom(
-                                    backgroundColor: Colors.blue.withOpacity(
-                                      0.1,
+                                    backgroundColor: Colors.blue.withValues(
+                                      alpha: 0.1,
                                     ),
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
@@ -1297,7 +1284,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     final XFile? file = await ImagePicker()
                                         .pickImage(source: ImageSource.camera);
 
-                                    if (file != null && mounted) {
+                                    if (file != null && context.mounted) {
                                       Navigator.pop(context);
                                       _openEditor(file.path);
                                     }
@@ -1328,6 +1315,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     onTap: () async {
                                       final file = await asset.file;
                                       if (file == null) return;
+                                      if (!context.mounted) return;
 
                                       Navigator.pop(context);
                                       _openEditor(file.path);
@@ -1352,8 +1340,8 @@ class _HomeScreenState extends State<HomeScreen>
                                                     vertical: 2,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: Colors.black.withOpacity(
-                                                  0.7,
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.7,
                                                 ),
                                                 borderRadius:
                                                     BorderRadius.circular(4),
@@ -1428,6 +1416,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void pasteInstagramLink() async {
     final data = await Clipboard.getData('text/plain');
+    if (!mounted) return;
     if (data != null && data.text != null && data.text!.isNotEmpty) {
       if (data.text!.contains("instagram.com/")) {
         _linkController.text = data.text!;
@@ -1448,6 +1437,7 @@ class _HomeScreenState extends State<HomeScreen>
   ) async {
     // "Show an ad each time when the user clicks Paste Link and proceeds with Go"
     AdService().handlePasteLinkAd(() {
+      if (!context.mounted) return;
       _processLinkNavigation(linkController);
     });
   }
@@ -1458,13 +1448,17 @@ class _HomeScreenState extends State<HomeScreen>
     String link = linkController.text.trim();
 
     if (!link.contains("instagram.com/")) {
-      UIUtils.showSnackBar(context, "⚠️ Please enter a valid Instagram link");
+      if (context.mounted) {
+        UIUtils.showSnackBar(context, "⚠️ Please enter a valid Instagram link");
+      }
       return;
     }
 
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
-      UIUtils.showSnackBar(context, "❌ No Internet Connection");
+      if (context.mounted) {
+        UIUtils.showSnackBar(context, "❌ No Internet Connection");
+      }
       return;
     }
 
@@ -1491,7 +1485,7 @@ class _HomeScreenState extends State<HomeScreen>
           return;
         }
         // Refresh login status after successful login
-        _checkLoginStatus();
+        // _checkLoginStatus();
         // If success == true, proceed to download!
       }
     }
@@ -1546,6 +1540,8 @@ class _HomeScreenState extends State<HomeScreen>
             body: {"instagramURL": link, "deviceId": deviceId},
           )
           .timeout(const Duration(seconds: 120));
+
+      if (!context.mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -1618,21 +1614,20 @@ class _HomeScreenState extends State<HomeScreen>
         throw Exception("Server error (${response.statusCode})");
       }
     } on TimeoutException catch (_) {
-      if (context.mounted) {
-        Navigator.of(context).pop(); // Close the status dialog
-        UIUtils.showSnackBar(
-          context,
-          "⌛ The server took too long to respond. Please try again.",
-        );
-      }
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // Close the status dialog
+      UIUtils.showSnackBar(
+        context,
+        "⌛ The server took too long to respond. Please try again.",
+      );
     } on SocketException catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop();
-        UIUtils.showSnackBar(context, "🌐 Connection Refused: ${e.message}");
-      }
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      UIUtils.showSnackBar(context, "🌐 Connection Refused: ${e.message}");
     } catch (e) {
       progressTimer?.cancel();
-      if (context.mounted) Navigator.of(context).pop();
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
       UIUtils.showSnackBar(context, "❌ Error: $e");
     }
   }
@@ -1662,7 +1657,7 @@ class _HomeScreenState extends State<HomeScreen>
         return androidInfo.id;
       }
     } catch (e) {
-      print("Failed to get device ID: $e");
+      debugPrint("Failed to get device ID: $e");
     }
     return "unknown_device";
   }
@@ -1738,7 +1733,7 @@ class _HomeScreenState extends State<HomeScreen>
               quality: 75,
             );
           } catch (e) {
-            print("Thumbnail error: $e");
+            debugPrint("Thumbnail error: $e");
           }
         }
         separated.add({"type": "video", "data": post, "thumbPath": thumbPath});

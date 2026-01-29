@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:InstSave/models/remote_config_models.dart';
-import 'package:InstSave/services/navigation_helper.dart';
-import 'package:InstSave/services/remote_config_service.dart';
-import 'package:InstSave/services/webview_screen.dart';
-import 'package:InstSave/services/iap_service.dart';
-import 'package:InstSave/utils/ui_utils.dart';
+import 'package:insta_save/models/remote_config_models.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/webview_screen.dart';
+import 'package:insta_save/services/iap_service.dart';
+import 'package:insta_save/utils/ui_utils.dart';
 
 // Entry point for testing
 void main() async {
@@ -301,7 +301,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                     .restorePurchases();
 
                                 // Close loading dialog
-                                if (mounted) {
+                                if (context.mounted) {
                                   Navigator.of(context).pop();
 
                                   // Show appropriate feedback

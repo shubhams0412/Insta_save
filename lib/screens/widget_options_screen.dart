@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:InstSave/utils/constants.dart';
+import 'package:insta_save/utils/constants.dart';
 
 // If you have the file, keep your import.
 // If not, I have included the OptionCard class at the bottom of this file.
@@ -24,7 +24,7 @@ class WidgetOptionsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -88,7 +88,7 @@ class _WidgetHeader extends StatelessWidget {
       ),
       child: const Center(
         child: Text(
-          Constants.AppName,
+          Constants.appName,
           style: TextStyle(
             fontFamily: "Pacifico", // Ensure this font is in pubspec.yaml
             fontSize: 28,
@@ -179,7 +179,7 @@ class OptionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: colors.last.withOpacity(0.4),
+            color: colors.last.withValues(alpha: 0.4),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),

@@ -252,7 +252,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
   // --- UI: Success Overlay (Matches Swift Design) ---
   Widget _buildSuccessOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       alignment: Alignment.center,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.8, end: 1.0),
@@ -269,7 +269,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 30,
                     offset: const Offset(0, 10),
                   ),
@@ -294,7 +294,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFCD2BF6).withOpacity(0.3),
+                          color: const Color(0xFFCD2BF6).withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -339,7 +339,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
   // --- UI: Error Overlay (Matches Swift Design) ---
   Widget _buildErrorOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       alignment: Alignment.center,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.8, end: 1.0),
@@ -356,7 +356,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 30,
                     offset: const Offset(0, 10),
                   ),
@@ -381,7 +381,7 @@ class _InstagramLoginWebViewState extends State<InstagramLoginWebView>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFFF4B4F).withOpacity(0.3),
+                          color: const Color(0xFFFF4B4F).withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),

@@ -6,12 +6,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import 'package:InstSave/screens/repost_screen.dart';
-import 'package:InstSave/services/download_manager.dart';
-import 'package:InstSave/services/navigation_helper.dart';
-import 'package:InstSave/widgets/status_dialog.dart';
-import 'package:InstSave/services/rating_service.dart';
-import 'package:InstSave/utils/ui_utils.dart';
+import 'package:insta_save/screens/repost_screen.dart';
+import 'package:insta_save/services/download_manager.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/widgets/status_dialog.dart';
+import 'package:insta_save/services/rating_service.dart';
+import 'package:insta_save/utils/ui_utils.dart';
 
 class PreviewScreen extends StatefulWidget {
   // Static flag to prevent HomeScreen from triggering rating when PreviewScreen is active

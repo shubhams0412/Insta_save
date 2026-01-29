@@ -69,7 +69,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     // Intercept back button press
     return PopScope(
       canPop: false, // We handle the pop manually
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         final shouldPop = await _handleBackNavigation();
         if (shouldPop && context.mounted) {

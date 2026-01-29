@@ -14,9 +14,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:InstSave/services/ad_service.dart'; // Import this
-import 'package:InstSave/utils/constants.dart';
-import 'package:InstSave/utils/ui_utils.dart';
+import 'package:insta_save/services/ad_service.dart'; // Import this
+import 'package:insta_save/utils/constants.dart';
+import 'package:insta_save/utils/ui_utils.dart';
 
 class RepostScreen extends StatefulWidget {
   final String imageUrl;
@@ -68,7 +68,6 @@ class _RepostScreenState extends State<RepostScreen>
   VideoPlayerController? _videoController;
   bool _isVideo = false;
   double _imageAspectRatio = 1.0;
-  bool _isLoadingImage = true;
   bool _isReposting = false;
   bool _didOpenInstagram = false; // Flag to track if we launched Instagram
 
@@ -138,7 +137,6 @@ class _RepostScreenState extends State<RepostScreen>
         if (mounted) {
           setState(() {
             _imageAspectRatio = _videoController!.value.aspectRatio;
-            _isLoadingImage = false;
           });
           _videoController!.setLooping(true);
           _videoController!.play();
@@ -172,12 +170,11 @@ class _RepostScreenState extends State<RepostScreen>
             if (mounted) {
               setState(() {
                 _imageAspectRatio = info.image.width / info.image.height;
-                _isLoadingImage = false;
               });
             }
           },
           onError: (_, __) {
-            if (mounted) setState(() => _isLoadingImage = false);
+            // Error handling
           },
         ),
       );
@@ -187,7 +184,6 @@ class _RepostScreenState extends State<RepostScreen>
     // Handle Local File
     final file = File(pathToCheck);
     if (!file.existsSync()) {
-      setState(() => _isLoadingImage = false);
       return;
     }
 
@@ -199,12 +195,11 @@ class _RepostScreenState extends State<RepostScreen>
           if (mounted) {
             setState(() {
               _imageAspectRatio = info.image.width / info.image.height;
-              _isLoadingImage = false;
             });
           }
         },
         onError: (_, __) {
-          if (mounted) setState(() => _isLoadingImage = false);
+          // Error handling
         },
       ),
     );
@@ -235,7 +230,7 @@ class _RepostScreenState extends State<RepostScreen>
     final cleanName = widget.username.replaceAll('@', '').trim();
 
     String toHex(Color c) =>
-        c.value.toRadixString(16).padLeft(8, '0').substring(2);
+        c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2);
 
     final textColor = toHex(_tagTextColor);
     final bgColor = toHex(_tagBackgroundColor);
@@ -267,14 +262,14 @@ class _RepostScreenState extends State<RepostScreen>
     final command =
         '-y -i "${widget.localImagePath}" '
         '-vf "drawtext='
-        'fontfile=${fontPath}:'
-        'text=${tagText}:'
-        'x=${x}:'
-        'y=${y}:'
+        'fontfile=$fontPath:'
+        'text=$tagText:'
+        'x=$x:'
+        'y=$y:'
         'fontsize=38:'
-        'fontcolor=0x${textColor}@${textOpacity}:'
+        'fontcolor=0x$textColor@$textOpacity:'
         'box=1:'
-        'boxcolor=0x${bgColor}@${bgOpacity}:'
+        'boxcolor=0x$bgColor@$bgOpacity:'
         'boxborderw=14" '
         '-c:v libx264 -preset ultrafast -pix_fmt yuv420p '
         '"$outputPath"';
@@ -335,9 +330,9 @@ class _RepostScreenState extends State<RepostScreen>
 
     // Draw background rectangle
     final bgColor = img.ColorRgba8(
-      _tagBackgroundColor.red,
-      _tagBackgroundColor.green,
-      _tagBackgroundColor.blue,
+      (_tagBackgroundColor.r * 255).round(),
+      (_tagBackgroundColor.g * 255).round(),
+      (_tagBackgroundColor.b * 255).round(),
       (_tagBackgroundOpacity * 255).toInt(),
     );
 
@@ -352,9 +347,9 @@ class _RepostScreenState extends State<RepostScreen>
 
     // Draw text
     final textColor = img.ColorRgba8(
-      _tagTextColor.red,
-      _tagTextColor.green,
-      _tagTextColor.blue,
+      (_tagTextColor.r * 255).round(),
+      (_tagTextColor.g * 255).round(),
+      (_tagTextColor.b * 255).round(),
       (_tagTextOpacity * 255).toInt(),
     );
 
@@ -428,12 +423,15 @@ class _RepostScreenState extends State<RepostScreen>
         }
       } on PlatformException catch (e) {
         debugPrint("Native Error: ${e.message}");
-        UIUtils.showSnackBar(context, "Platform Error: ${e.message}");
+        if (mounted) {
+          UIUtils.showSnackBar(context, "Platform Error: ${e.message}");
+        }
       } catch (e) {
         debugPrint("General Error: $e");
       } finally {
-        if (mounted)
+        if (mounted) {
           setState(() => _isReposting = false); // ✅ Always stops spinner
+        }
       }
     }); // End Ad Block
   }
@@ -478,7 +476,7 @@ class _RepostScreenState extends State<RepostScreen>
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         title: const Text(
-          Constants.AppName,
+          Constants.appName,
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
@@ -725,8 +723,8 @@ class _RepostScreenState extends State<RepostScreen>
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: _tagBackgroundColor.withOpacity(
-                        _tagBackgroundOpacity,
+                      color: _tagBackgroundColor.withValues(
+                        alpha: _tagBackgroundOpacity,
                       ),
                       borderRadius: BorderRadius.circular(6),
                     ),
@@ -736,14 +734,18 @@ class _RepostScreenState extends State<RepostScreen>
                         Icon(
                           Icons.bookmark_border,
                           size: 16,
-                          color: _tagIconColor.withOpacity(_tagIconOpacity),
+                          color: _tagIconColor.withValues(
+                            alpha: _tagIconOpacity,
+                          ),
                         ),
                         const SizedBox(width: 4),
                         Text(
                           "@${widget.username.replaceAll('@', '').trim()}",
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: _tagTextColor.withOpacity(_tagTextOpacity),
+                            color: _tagTextColor.withValues(
+                              alpha: _tagTextOpacity,
+                            ),
                           ),
                         ),
                       ],
@@ -1198,24 +1200,26 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
 
   void _updateColor(Color c) {
     setState(() {
-      if (_selectedTab == 0)
+      if (_selectedTab == 0) {
         iconColor = c;
-      else if (_selectedTab == 1)
+      } else if (_selectedTab == 1) {
         textColor = c;
-      else
+      } else {
         bgColor = c;
+      }
     });
     _notifyParent();
   }
 
   void _updateOpacity(double val) {
     setState(() {
-      if (_selectedTab == 0)
+      if (_selectedTab == 0) {
         iconOp = val;
-      else if (_selectedTab == 1)
+      } else if (_selectedTab == 1) {
         textOp = val;
-      else
+      } else {
         bgOp = val;
+      }
     });
     _notifyParent();
   }
@@ -1337,7 +1341,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: bgColor.withOpacity(bgOp),
+        color: bgColor.withValues(alpha: bgOp),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: Colors.grey.shade300),
       ),
@@ -1347,7 +1351,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
           Icon(
             Icons.bookmark_border,
             size: 16,
-            color: iconColor.withOpacity(iconOp),
+            color: iconColor.withValues(alpha: iconOp),
           ),
           const SizedBox(width: 4),
           Text(
@@ -1355,7 +1359,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 12,
-              color: textColor.withOpacity(textOp),
+              color: textColor.withValues(alpha: textOp),
             ),
           ),
         ],
@@ -1387,7 +1391,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
   }
 
   Widget _buildColorCircle(Color color) {
-    bool isSelected = color.value == currentColor.value;
+    bool isSelected = color.toARGB32() == currentColor.toARGB32();
     return GestureDetector(
       onTap: () => _updateColor(color),
       child: Container(

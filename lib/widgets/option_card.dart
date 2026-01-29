@@ -28,7 +28,7 @@ class OptionCard extends StatelessWidget {
         // 2. Added Shadow for depth
         boxShadow: [
           BoxShadow(
-            color: colors.last.withOpacity(0.4),
+            color: colors.last.withValues(alpha: 0.4),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),

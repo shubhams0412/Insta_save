@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:InstSave/screens/repost_screen.dart';
+import 'package:insta_save/screens/repost_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:InstSave/services/saved_post.dart';
-import 'package:InstSave/services/navigation_helper.dart';
-import 'package:InstSave/utils/ui_utils.dart';
+import 'package:insta_save/services/saved_post.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/utils/ui_utils.dart';
 
 class AllMediaScreen extends StatefulWidget {
   final String title;
@@ -182,7 +182,7 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
     // Intercept Back Button to cancel selection mode first
     return PopScope(
       canPop: !_isSelectionMode,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_isSelectionMode) {
           _toggleSelectionMode();
@@ -306,42 +306,40 @@ class _AllMediaScreenState extends State<AllMediaScreen> {
           isSelectionMode: _isSelectionMode,
           isSelected: _selectedPaths.contains(post.localPath),
           isVideo: postMap['type'] == 'video',
-          onTap: () {
+          onTap: () async {
             if (_isSelectionMode) {
               _toggleItemSelection(post.localPath);
             } else {
               FocusManager.instance.primaryFocus?.unfocus();
-              Navigator.of(context)
-                  .push(
-                    createSlideRoute(
-                      RepostScreen(
-                        imageUrl: post.localPath,
-                        username: post.username,
-                        initialCaption: post.caption,
-                        postUrl: post.postUrl,
-                        localImagePath: post.localPath,
-                        showDeleteButton: true,
-                        thumbnailUrl: postMap['thumbPath'] as String,
-                      ),
-                      direction: SlideFrom.bottom,
-                    ),
-                  )
-                  .then((result) async {
-                    // If result is Map and has home flag, pop back to home with the result
-                    if (result is Map && result['home'] == true) {
-                      if (mounted) {
-                        Navigator.of(context).pop(result);
-                      }
-                    } else if (result == true) {
-                      // If item was deleted, remove from list
-                      setState(() {
-                        _currentList.removeWhere((item) {
-                          final p = item['data'] as SavedPost;
-                          return p.localPath == post.localPath;
-                        });
-                      });
-                    }
+              final result = await Navigator.of(context).push(
+                createSlideRoute(
+                  RepostScreen(
+                    imageUrl: post.localPath,
+                    username: post.username,
+                    initialCaption: post.caption,
+                    postUrl: post.postUrl,
+                    localImagePath: post.localPath,
+                    showDeleteButton: true,
+                    thumbnailUrl: postMap['thumbPath'] as String,
+                  ),
+                  direction: SlideFrom.bottom,
+                ),
+              );
+
+              if (!context.mounted) return;
+
+              // If result is Map and has home flag, pop back to home with the result
+              if (result is Map && result['home'] == true) {
+                Navigator.of(context).pop(result);
+              } else if (result == true) {
+                // If item was deleted, remove from list
+                setState(() {
+                  _currentList.removeWhere((item) {
+                    final p = item['data'] as SavedPost;
+                    return p.localPath == post.localPath;
                   });
+                });
+              }
             }
           },
           onLongPress: () {
@@ -401,7 +399,7 @@ class MediaGridItem extends StatelessWidget {
             if (isSelected)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
@@ -440,7 +438,7 @@ class MediaGridItem extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
-              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+              colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
             ),
           ),
           child: Text(

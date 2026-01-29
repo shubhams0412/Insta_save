@@ -13,7 +13,7 @@ class _RatingDialogState extends State<RatingDialog> {
   double _rating = 4.0;
 
   Future<void> _redirectToStore() async {
-    final Uri url = Uri.parse(Constants.Play_Store_URL);
+    final Uri url = Uri.parse(Constants.playStoreUrl);
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
@@ -127,7 +127,7 @@ class _RatingDialogState extends State<RatingDialog> {
                           },
                           onChangeEnd: (value) async {
                             await _redirectToStore();
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.of(context).pop(_rating);
                             }
                           },
@@ -173,7 +173,7 @@ class _RatingDialogState extends State<RatingDialog> {
                   child: ElevatedButton(
                     onPressed: () async {
                       await _redirectToStore();
-                      if (mounted) {
+                      if (context.mounted) {
                         Navigator.of(context).pop(_rating);
                       }
                     },

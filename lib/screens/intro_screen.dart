@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:InstSave/screens/rating_screen.dart';
-import 'package:InstSave/services/remote_config_service.dart';
-import 'package:InstSave/services/rating_service.dart';
+import 'package:insta_save/screens/rating_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/rating_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 

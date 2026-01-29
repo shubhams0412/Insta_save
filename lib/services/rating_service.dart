@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:InstSave/main.dart'; // To access navigatorKey
-import 'package:InstSave/widgets/rating_dialog.dart';
+import 'package:insta_save/main.dart'; // To access navigatorKey
+import 'package:insta_save/widgets/rating_dialog.dart';
 
 class RatingService {
   static final RatingService _instance = RatingService._internal();

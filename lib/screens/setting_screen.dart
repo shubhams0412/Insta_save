@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 // ✅ Import your app screens
-import 'package:InstSave/screens/sales_screen.dart';
-import 'package:InstSave/screens/widget_screen.dart';
-import 'package:InstSave/services/navigation_helper.dart';
-import 'package:InstSave/services/webview_screen.dart';
-import 'package:InstSave/services/remote_config_service.dart';
-import 'package:InstSave/services/ad_service.dart';
-import 'package:InstSave/services/rating_service.dart';
-import 'package:InstSave/services/iap_service.dart';
-import 'package:InstSave/utils/constants.dart';
+import 'package:insta_save/screens/sales_screen.dart';
+import 'package:insta_save/screens/widget_screen.dart';
+import 'package:insta_save/services/navigation_helper.dart';
+import 'package:insta_save/services/webview_screen.dart';
+import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/ad_service.dart';
+import 'package:insta_save/services/rating_service.dart';
+import 'package:insta_save/services/iap_service.dart';
+import 'package:insta_save/utils/constants.dart';
 
-import '_buildStepCard.dart';
+import 'tutorial_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -98,10 +98,10 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () {
                       AdService().setPausedForShare(true);
                       Share.share(
-                        '📲 Share ${Constants.AppName} with Friends!\n\n'
+                        '📲 Share ${Constants.appName} with Friends!\n\n'
                         'Love saving Reels, Stories & Posts?\n'
-                        'Share ${Constants.AppName} and let your friends get their favorite social content too!\n'
-                        '🔗 ${Constants.Play_Store_URL}',
+                        'Share ${Constants.appName} and let your friends get their favorite social content too!\n'
+                        '🔗 ${Constants.playStoreUrl}',
                       );
                     },
                   ),
@@ -197,7 +197,7 @@ class SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFE15151).withOpacity(0.3),
+                  color: const Color(0xFFE15151).withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),

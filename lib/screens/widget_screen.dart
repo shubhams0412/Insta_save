@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:InstSave/utils/constants.dart';
+import 'package:insta_save/utils/constants.dart';
 
 class WidgetsScreen extends StatefulWidget {
   const WidgetsScreen({super.key});
@@ -23,7 +23,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
   final List<String> _steps = [
     "From the Home Screen, touch and hold a widget or empty space until your apps jiggle.",
     "Tap the Add (+) button in the upper-left corner.",
-    "Scroll until you find ${Constants.AppName}.",
+    "Scroll until you find ${Constants.appName}.",
     "Choose your preferred widget size and press Add Widget.",
   ];
 
@@ -153,7 +153,7 @@ class _WidgetsScreenState extends State<WidgetsScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),

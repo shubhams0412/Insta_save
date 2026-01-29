@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:InstSave/main.dart';
-import 'package:InstSave/services/remote_config_service.dart';
-import 'package:InstSave/services/iap_service.dart';
+import 'package:insta_save/main.dart';
+import 'package:insta_save/services/remote_config_service.dart';
+import 'package:insta_save/services/iap_service.dart';
 
 class AdService {
   static final AdService _instance = AdService._internal();
@@ -20,10 +20,10 @@ class AdService {
   // Ad Unit IDs
   final String _bannerAdUnitIdAndroid = kDebugMode
       ? 'ca-app-pub-3940256099942544/6300978111'
-      : 'ca-app-pub-3940256099942544/6300978111'; // TODO: Update with prod ID if available
+      : 'ca-app-pub-3940256099942544/6300978111';
   final String _bannerAdUnitIdiOS = kDebugMode
       ? 'ca-app-pub-3940256099942544/2934735716'
-      : 'ca-app-pub-3940256099942544/2934735716'; // TODO: Update with prod ID if available
+      : 'ca-app-pub-3940256099942544/2934735716';
 
   final String _interstitialAdUnitIdAndroid = kDebugMode
       ? 'ca-app-pub-3940256099942544/1033173712'
@@ -128,6 +128,8 @@ class AdService {
       debugPrint("App Open Ad Flow: Skipping due to interval ($openCount).");
       return;
     }
+
+    if (!context.mounted) return;
 
     // 1. Show Loader Screen
     // 1. Show Loader Screen
@@ -332,8 +334,8 @@ class _LoaderPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // WillPopScope to prevent back button
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         backgroundColor: Colors.white, // Background screen color
         body: Center(
