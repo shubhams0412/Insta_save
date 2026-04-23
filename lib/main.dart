@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:insta_save/screens/rating_screen.dart';
 import 'package:insta_save/screens/home_screen.dart'; // Renamed for consistency (was home_screen.dart)
@@ -132,6 +133,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // 4. Proper Material 3 Theme Configuration
       theme: ThemeData(
         useMaterial3: true,
+        textTheme: GoogleFonts.urbanistTextTheme(
+          Theme.of(context).textTheme,
+        ),
         scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.black, // Primary Brand Color

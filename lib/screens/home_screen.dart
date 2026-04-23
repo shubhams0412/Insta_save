@@ -35,6 +35,26 @@ import '../services/instagram_login_webview.dart';
 import '../widgets/status_dialog.dart';
 import 'tutorial_screen.dart';
 
+enum _CreatorStudioAction {
+  transcribeTranslate,
+  hookTiming,
+  trendyCaptions,
+  trendyHashtags,
+  downloadAssets,
+}
+
+class _CreatorStudioOption {
+  final String title;
+  final IconData icon;
+  final _CreatorStudioAction action;
+
+  const _CreatorStudioOption({
+    required this.title,
+    required this.icon,
+    required this.action,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   final int initialTabIndex;
   final bool silentLoad;
@@ -50,9 +70,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _linkController = TextEditingController();
   late TabController _tabController;
+  static const List<_CreatorStudioOption> _creatorStudioOptions = [
+    _CreatorStudioOption(
+      title: "Transcribe and Translate",
+      icon: Icons.translate_rounded,
+      action: _CreatorStudioAction.transcribeTranslate,
+    ),
+    _CreatorStudioOption(
+      title: "Hook Timing",
+      icon: Icons.music_note_rounded,
+      action: _CreatorStudioAction.hookTiming,
+    ),
+    _CreatorStudioOption(
+      title: "Trendy Captions",
+      icon: Icons.trending_up_rounded,
+      action: _CreatorStudioAction.trendyCaptions,
+    ),
+    _CreatorStudioOption(
+      title: "Trendy Hashtags",
+      icon: Icons.tag_rounded,
+      action: _CreatorStudioAction.trendyHashtags,
+    ),
+    _CreatorStudioOption(
+      title: "Download Post Images/PDF",
+      icon: Icons.download_rounded,
+      action: _CreatorStudioAction.downloadAssets,
+    ),
+  ];
 
   List<Map<String, dynamic>>? _separatedMedia;
   bool _isLoadingMedia = true;
@@ -68,6 +115,8 @@ class _HomeScreenState extends State<HomeScreen>
     'com.video.downloader.saver.manager.free.allvideodownloader/widget_actions',
   );
 
+  late AnimationController _creatorStudioController;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +128,11 @@ class _HomeScreenState extends State<HomeScreen>
       length: 3,
       vsync: this,
       initialIndex: widget.initialTabIndex,
+    );
+
+    _creatorStudioController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
     );
 
     // Register Lifecycle Observer
@@ -232,6 +286,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _creatorStudioController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _downloadSubscription?.cancel();
     _linkController.dispose();
@@ -290,6 +345,8 @@ class _HomeScreenState extends State<HomeScreen>
 
             // --- UPGRADE TO PRO CARD (Fixed at bottom) ---
             Positioned(bottom: 16, left: 16, right: 16, child: _buildProCard()),
+
+            _buildCreatorStudioButton(),
           ],
         ),
       ),
@@ -365,9 +422,10 @@ class _HomeScreenState extends State<HomeScreen>
               const Text(
                 "How to Use Select Pics & Repost?",
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.black54,
                   decoration: TextDecoration.underline,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -593,7 +651,7 @@ class _HomeScreenState extends State<HomeScreen>
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
                 "My Saved Collection",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
             ),
             const SizedBox(height: 10),
@@ -869,6 +927,7 @@ class _HomeScreenState extends State<HomeScreen>
                   initialCaption: post.caption,
                   postUrl: post.postUrl,
                   localImagePath: post.localPath,
+                  allMediaPaths: [post.localPath],
                   showDeleteButton: true,
                   thumbnailUrl: thumbPath ?? "",
                 ),
@@ -1030,7 +1089,7 @@ class _HomeScreenState extends State<HomeScreen>
                             color:
                                 homeConfig?.proCardTitleColor ?? Colors.white,
                             fontSize: homeConfig?.proCardTitleSize ?? 20,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
@@ -1061,7 +1120,226 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Color _creatorStudioAccentColor(_CreatorStudioAction action) {
+    switch (action) {
+      case _CreatorStudioAction.transcribeTranslate:
+        return const Color(0xFF00BCD4);
+      case _CreatorStudioAction.hookTiming:
+        return const Color(0xFFFF9800);
+      case _CreatorStudioAction.trendyCaptions:
+        return const Color(0xFF4CAF50);
+      case _CreatorStudioAction.trendyHashtags:
+        return const Color(0xFF2196F3);
+      case _CreatorStudioAction.downloadAssets:
+        return const Color(0xFF9C27B0);
+    }
+  }
+
+  void _showCreatorStudioSheet() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _creatorStudioController.forward();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Creator Studio",
+              style: TextStyle(
+                fontSize: 22,
+                color: Colors.black,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "AI-powered tools for your reels",
+              style: TextStyle(fontSize: 13, color: Colors.black45),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 140,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: _creatorStudioOptions.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (ctx, index) {
+                  final option = _creatorStudioOptions[index];
+                  final color = _creatorStudioAccentColor(option.action);
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openCreatorStudioLinkDialog(option);
+                    },
+                    child: Container(
+                      width: 118,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.07),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 16, 8, 10),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(option.icon, size: 22, color: color),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              option.title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                                height: 1.25,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(() => _creatorStudioController.reverse());
+  }
+
+  Widget _buildCreatorStudioButton() {
+    return Positioned(
+      right: 16,
+      bottom: 112,
+      child: GestureDetector(
+        onTap: _showCreatorStudioSheet,
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.only(left: 14, right: 22),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1A1A1A), Color(0xFF3A3A3A)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RotationTransition(
+                turns: Tween<double>(begin: 0, end: 0.125).animate(
+                  CurvedAnimation(
+                    parent: _creatorStudioController,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                "Creator Studio",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- ACTIONS ---
+  Future<void> _openCreatorStudioLinkDialog(_CreatorStudioOption option) async {
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return _CreatorStudioDialog(
+          option: option,
+          initialText: _linkController.text,
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      _handleCreatorStudioLink(option, result);
+    }
+  }
+
+  void _handleCreatorStudioLink(_CreatorStudioOption option, String link) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _linkController.text = link;
+
+    if (option.action == _CreatorStudioAction.downloadAssets) {
+      navigateToPreviewScreen(context, _linkController);
+      return;
+    }
+
+    UIUtils.showSnackBar(
+      context,
+      "${option.title} will process this reel soon",
+    );
+  }
+
   Future<void> pickImageFromGallery() async {
     if (_isOpeningGallery) return;
     setState(() => _isOpeningGallery = true);
@@ -1069,8 +1347,6 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       await AdService().handleSelectPicsAd(() async {
         try {
-          // Use requestPermissionExtend() which is the modern standard for photo_manager.
-          // It returns the current state if already granted.
           PermissionState permission =
               await PhotoManager.requestPermissionExtend();
 
@@ -1080,7 +1356,6 @@ class _HomeScreenState extends State<HomeScreen>
             return;
           }
 
-          // Fetch albums. For limited access, this should return the virtual 'Recent' album.
           List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
             type: RequestType.common,
             filterOption: FilterOptionGroup(
@@ -1090,8 +1365,6 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           );
 
-          // If albums is empty in limited access, it might be because the filter is too restrictive or
-          // the virtual album hasn't been populated yet. Try a simple fetch.
           if (albums.isEmpty && permission == PermissionState.limited) {
             albums = await PhotoManager.getAssetPathList(
               type: RequestType.common,
@@ -1100,7 +1373,6 @@ class _HomeScreenState extends State<HomeScreen>
 
           if (albums.isEmpty) {
             if (permission == PermissionState.limited) {
-              // Only prompt if we really can't find anything to show.
               await PhotoManager.presentLimited();
               albums = await PhotoManager.getAssetPathList(
                 type: RequestType.common,
@@ -1147,7 +1419,6 @@ class _HomeScreenState extends State<HomeScreen>
                     return Column(
                       children: [
                         const SizedBox(height: 12),
-                        // Drag Handle
                         Container(
                           width: 40,
                           height: 5,
@@ -1158,7 +1429,6 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(height: 12),
 
-                        /// Album Dropdown & Manage (for Limited Access)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Row(
@@ -1204,9 +1474,6 @@ class _HomeScreenState extends State<HomeScreen>
                                   ),
                                 ),
                               ),
-                              // Show 'Add More' if permission is limited OR not fully authorized
-                              // (Handles cases where Android 14+ might return slightly different states
-                              // but still has limited picker enabled)
                               if (permission != PermissionState.authorized) ...[
                                 const SizedBox(width: 8),
                                 TextButton.icon(
@@ -1224,7 +1491,6 @@ class _HomeScreenState extends State<HomeScreen>
                                   onPressed: () async {
                                     await PhotoManager.presentLimited();
 
-                                    // Refresh permission state to check if user switched to Full Access
                                     permission =
                                         await PhotoManager.requestPermissionExtend();
 
@@ -1277,7 +1543,6 @@ class _HomeScreenState extends State<HomeScreen>
                                 ),
                             itemCount: assets.length + 1,
                             itemBuilder: (_, i) {
-                              /// Camera Button
                               if (i == 0) {
                                 return GestureDetector(
                                   onTap: () async {
@@ -1328,7 +1593,6 @@ class _HomeScreenState extends State<HomeScreen>
                                           fit: BoxFit.cover,
                                         ),
 
-                                        /// Video Overlay
                                         if (asset.type == AssetType.video)
                                           Align(
                                             alignment: Alignment.bottomRight,
@@ -1435,9 +1699,8 @@ class _HomeScreenState extends State<HomeScreen>
     BuildContext context,
     TextEditingController linkController,
   ) async {
-    // "Show an ad each time when the user clicks Paste Link and proceeds with Go"
     AdService().handlePasteLinkAd(() {
-      if (!context.mounted) return;
+      if (!mounted) return;
       _processLinkNavigation(linkController);
     });
   }
@@ -1448,7 +1711,7 @@ class _HomeScreenState extends State<HomeScreen>
     String link = linkController.text.trim();
 
     if (!link.contains("instagram.com/")) {
-      if (context.mounted) {
+      if (mounted) {
         UIUtils.showSnackBar(context, "⚠️ Please enter a valid Instagram link");
       }
       return;
@@ -1456,27 +1719,24 @@ class _HomeScreenState extends State<HomeScreen>
 
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
-      if (context.mounted) {
+      if (mounted) {
         UIUtils.showSnackBar(context, "❌ No Internet Connection");
       }
       return;
     }
 
-    // Check Firebase Remote Config flag for login flow
     final remoteConfig = RemoteConfigService();
     final bool isLoginFlowEnabled = remoteConfig.isInstaLoginFlowEnabled;
 
     if (isLoginFlowEnabled) {
-      // Original behavior: Check login status and show login if needed
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       bool isLoggedIn = prefs.getBool('isInstagramLoggedIn') ?? false;
 
       if (!isLoggedIn) {
-        // User is not logged in, open the Login Webview
         bool success = await openInstaLogin(context);
         if (!success) {
-          // User cancelled login or failed, so we stop here.
-          if (context.mounted) {
+          if (mounted) {
             UIUtils.showSnackBar(
               context,
               "⚠️ Login required to download content",
@@ -1484,12 +1744,10 @@ class _HomeScreenState extends State<HomeScreen>
           }
           return;
         }
-        // Refresh login status after successful login
-        // _checkLoginStatus();
-        // If success == true, proceed to download!
       }
     }
-    // If login flow is disabled, skip login check and proceed directly to API call
+
+    if (!mounted) return;
 
     double fakeProgress = 0.0;
     Timer? progressTimer;
@@ -1541,7 +1799,7 @@ class _HomeScreenState extends State<HomeScreen>
           )
           .timeout(const Duration(seconds: 120));
 
-      if (!context.mounted) return;
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -1576,7 +1834,7 @@ class _HomeScreenState extends State<HomeScreen>
         _linkController.clear();
         FocusManager.instance.primaryFocus?.unfocus();
 
-        if (context.mounted) {
+        if (mounted) {
           Navigator.of(context)
               .push(
                 createSlideRoute(
@@ -1599,7 +1857,6 @@ class _HomeScreenState extends State<HomeScreen>
                   if (result['rating'] == true) {
                     Future.delayed(const Duration(milliseconds: 500), () {
                       if (mounted) {
-                        // Show native rating on 1st, 5th, 9th... when tapping Home from Repost
                         RatingService().showNativeRating(
                           RatingService().repostGoHomeCountKey,
                         );
@@ -1614,19 +1871,19 @@ class _HomeScreenState extends State<HomeScreen>
         throw Exception("Server error (${response.statusCode})");
       }
     } on TimeoutException catch (_) {
-      if (!context.mounted) return;
-      Navigator.of(context).pop(); // Close the status dialog
+      if (!mounted) return;
+      Navigator.of(context).pop();
       UIUtils.showSnackBar(
         context,
         "⌛ The server took too long to respond. Please try again.",
       );
     } on SocketException catch (e) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       Navigator.of(context).pop();
       UIUtils.showSnackBar(context, "🌐 Connection Refused: ${e.message}");
     } catch (e) {
       progressTimer?.cancel();
-      if (!context.mounted) return;
+      if (!mounted) return;
       Navigator.of(context).pop();
       UIUtils.showSnackBar(context, "❌ Error: $e");
     }
@@ -1716,7 +1973,6 @@ class _HomeScreenState extends State<HomeScreen>
       if (!File(path).existsSync()) continue;
 
       if (path.toLowerCase().endsWith(".mp4")) {
-        // FIX: Check if we already have this thumbnail in current state to avoid re-generating
         String? existingThumb = _separatedMedia?.firstWhere(
           (m) => (m['data'] as SavedPost).localPath == path,
           orElse: () => {},
@@ -1746,5 +2002,102 @@ class _HomeScreenState extends State<HomeScreen>
 
   String _formatDuration(Duration d) {
     return "${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
+  }
+}
+
+// ── Specialized Widget for the Creator Studio Dialog to manage its own lifecycle ──
+class _CreatorStudioDialog extends StatefulWidget {
+  final _CreatorStudioOption option;
+  final String initialText;
+
+  const _CreatorStudioDialog({required this.option, required this.initialText});
+
+  @override
+  State<_CreatorStudioDialog> createState() => _CreatorStudioDialogState();
+}
+
+class _CreatorStudioDialogState extends State<_CreatorStudioDialog> {
+  late TextEditingController _dialogController;
+
+  @override
+  void initState() {
+    super.initState();
+    _dialogController = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _dialogController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
+        widget.option.title,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      content: TextField(
+        controller: _dialogController,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: "Paste Instagram reel link",
+          filled: true,
+          fillColor: Colors.grey.shade100,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.content_paste_rounded),
+            onPressed: () async {
+              final data = await Clipboard.getData(Clipboard.kTextPlain);
+              if (!context.mounted) return;
+              final text = data?.text?.trim() ?? "";
+              if (text.contains("instagram.com/")) {
+                setState(() {
+                  _dialogController.text = text;
+                });
+              } else {
+                UIUtils.showSnackBar(
+                  context,
+                  "⚠️ Please copy a valid Instagram link",
+                );
+              }
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () {
+            final link = _dialogController.text.trim();
+            if (!link.contains("instagram.com/")) {
+              UIUtils.showSnackBar(
+                context,
+                "⚠️ Please enter a valid Instagram link",
+              );
+              return;
+            }
+            Navigator.of(context).pop(link);
+          },
+          child: const Text("Continue"),
+        ),
+      ],
+    );
   }
 }

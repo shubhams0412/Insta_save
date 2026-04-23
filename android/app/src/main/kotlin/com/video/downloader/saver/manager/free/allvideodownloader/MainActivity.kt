@@ -48,7 +48,6 @@ class MainActivity : FlutterActivity() {
              }
         }
 
-        // 🔹 Save video into MediaStore
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             MEDIA_CHANNEL
@@ -70,21 +69,33 @@ class MainActivity : FlutterActivity() {
                 }
 
                 val isImage = mediaType == "image"
-                val contentUri = if (isImage) {
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                } else {
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                val isPdf = mediaType == "pdf"
+
+                val contentUri = when {
+                    isImage -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    isPdf && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                    else -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                 }
 
                 val values = ContentValues().apply {
-                    if (isImage) {
-                        put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
-                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/InstaSave")
-                    } else {
-                        put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
-                        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                        put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/InstaSave")
+                    when {
+                        isImage -> {
+                            put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
+                            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/InstaSave")
+                        }
+                        isPdf -> {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+                            put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/InstaSave")
+                            }
+                        }
+                        else -> {
+                            put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
+                            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                            put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/InstaSave")
+                        }
                     }
                 }
 

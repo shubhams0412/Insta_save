@@ -67,6 +67,10 @@ dependencies:
   fluttertoast: ^9.0.0
   photo_manager: ^3.5.0
   permission_handler: ^11.0.1
+  pdf: ^3.11.0
+  printing: ^5.13.0
+  google_mlkit_translation: ^0.13.1
+  google_fonts: ^6.2.1
 
   in_app_purchase_android: any
 dev_dependencies:

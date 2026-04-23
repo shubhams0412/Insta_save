@@ -1,11 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -18,12 +24,71 @@ import 'package:insta_save/services/ad_service.dart'; // Import this
 import 'package:insta_save/utils/constants.dart';
 import 'package:insta_save/utils/ui_utils.dart';
 
+enum _ReelOptionAction {
+  originalCaption,
+  transcribeTranslate,
+  hookTiming,
+  trendyCaptions,
+  trendyHashtags,
+  exportPdf,
+  downloadAssets,
+}
+
+class _ReelCreationOption {
+  final String title;
+  final IconData icon;
+  final _ReelOptionAction action;
+  final bool isPro;
+
+  const _ReelCreationOption({
+    required this.title,
+    required this.icon,
+    required this.action,
+    this.isPro = true,
+  });
+}
+
+class _ReelReportData {
+  final String username;
+  final String title;
+  final String originalCaption;
+  final String currentCaption;
+  final String trendyCaption;
+  final String transcript;
+  final String translated;
+  final String detectedLanguage;
+  final String hookText;
+  final double hookStart;
+  final double hookEnd;
+  final List<String> hashtags;
+  final List<String> keywords;
+  final Uint8List? thumbnailBytes;
+
+  const _ReelReportData({
+    required this.username,
+    required this.title,
+    required this.originalCaption,
+    required this.currentCaption,
+    required this.trendyCaption,
+    required this.transcript,
+    required this.translated,
+    required this.detectedLanguage,
+    required this.hookText,
+    required this.hookStart,
+    required this.hookEnd,
+    required this.hashtags,
+    required this.keywords,
+    required this.thumbnailBytes,
+  });
+}
+
 class RepostScreen extends StatefulWidget {
   final String imageUrl;
   final String username;
   final String initialCaption;
   final String postUrl;
   final String localImagePath;
+  final List<String> allMediaPaths;
   final bool showDeleteButton;
   final bool showHomeButton;
   final String thumbnailUrl;
@@ -36,6 +101,7 @@ class RepostScreen extends StatefulWidget {
     required this.postUrl,
     required this.localImagePath,
     required this.thumbnailUrl,
+    this.allMediaPaths = const [],
     this.showDeleteButton = false,
     this.showHomeButton = false,
   });
@@ -50,6 +116,63 @@ class _RepostScreenState extends State<RepostScreen>
 
   static const MethodChannel _mediaStoreChannel = MethodChannel('media_store');
   static const MethodChannel _instaChannel = MethodChannel('insta_share');
+
+  static const String _apiBaseUrl = kReleaseMode
+      ? "https://api.instasave.turbofast.io/"
+      : "http://13.200.64.163:9081/";
+
+  // ── Local Cache Helper ────────────────────────────────────
+  Future<String?> _getFromCache(String type) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'ai_${widget.imageUrl}_$type';
+    return prefs.getString(key);
+  }
+
+  Future<void> _saveToCache(String type, Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'ai_${widget.imageUrl}_$type';
+    await prefs.setString(key, jsonEncode(data));
+  }
+
+  // ──────────────────────────────────────────────────────────
+  static const List<_ReelCreationOption> _reelCreationOptions = [
+    _ReelCreationOption(
+      title: 'Original\nCaption',
+      icon: Icons.notes_rounded,
+      action: _ReelOptionAction.originalCaption,
+      isPro: false,
+    ),
+    _ReelCreationOption(
+      title: 'Transcribe\nTranslate',
+      icon: Icons.translate_rounded,
+      action: _ReelOptionAction.transcribeTranslate,
+    ),
+    _ReelCreationOption(
+      title: 'Hook\nTiming',
+      icon: Icons.music_note_rounded,
+      action: _ReelOptionAction.hookTiming,
+    ),
+    _ReelCreationOption(
+      title: 'Trendy\nCaptions',
+      icon: Icons.trending_up_rounded,
+      action: _ReelOptionAction.trendyCaptions,
+    ),
+    _ReelCreationOption(
+      title: 'Trendy\nHashtags',
+      icon: Icons.tag_rounded,
+      action: _ReelOptionAction.trendyHashtags,
+    ),
+    _ReelCreationOption(
+      title: 'Export\nPDF',
+      icon: Icons.picture_as_pdf_outlined,
+      action: _ReelOptionAction.exportPdf,
+    ),
+    _ReelCreationOption(
+      title: 'Download\nImages/PDF',
+      icon: Icons.download_rounded,
+      action: _ReelOptionAction.downloadAssets,
+    ),
+  ];
 
   // Tag State
   final List<bool> _alignmentSelections = [true, false, false, false];
@@ -507,6 +630,1547 @@ class _RepostScreenState extends State<RepostScreen>
     );
   }
 
+  Future<void> _handleReelOptionTap(_ReelCreationOption option) async {
+    switch (option.action) {
+      // ── 1. Original Caption ─────────────────────────────────
+      case _ReelOptionAction.originalCaption:
+        final caption = widget.initialCaption.trim();
+        if (caption.isEmpty) {
+          UIUtils.showSnackBar(context, 'No original caption available');
+          return;
+        }
+        await Clipboard.setData(ClipboardData(text: caption));
+        if (mounted) UIUtils.showSnackBar(context, 'Original caption copied ✓');
+        break;
+
+      // ── 2. Transcribe & Translate ────────────────────────────
+      case _ReelOptionAction.transcribeTranslate:
+        if (!_isVideo) {
+          UIUtils.showSnackBar(
+            context,
+            'Transcription is only for video reels',
+          );
+          return;
+        }
+        await _showTranscribeSheet();
+        break;
+
+      // ── 3. Hook Timing ──────────────────────────────────────
+      case _ReelOptionAction.hookTiming:
+        if (!_isVideo) {
+          UIUtils.showSnackBar(
+            context,
+            'Hook extraction is only for video reels',
+          );
+          return;
+        }
+        await _showHookSheet();
+        break;
+
+      // ── 4. Trendy Captions ──────────────────────────────────
+      case _ReelOptionAction.trendyCaptions:
+        final src = _captionController.text.trim().isNotEmpty
+            ? _captionController.text.trim()
+            : widget.initialCaption.trim();
+        // Removed src.isEmpty validation since AI now uses the image/video content!
+        await _showTrendyCaptionsSheet(src);
+        break;
+
+      // ── 5. Trendy Hashtags ──────────────────────────────────
+      case _ReelOptionAction.trendyHashtags:
+        final src = _captionController.text.trim().isNotEmpty
+            ? _captionController.text.trim()
+            : widget.initialCaption.trim();
+        // Removed src.isEmpty validation since AI now uses the image/video content!
+        await _showTrendyHashtagsSheet(src);
+        break;
+
+      // ── 6. Export as PDF ────────────────────────────────────
+      case _ReelOptionAction.exportPdf:
+        _showExportPdfSheet();
+        break;
+
+      // ── 7. Download Post Images/PDF ─────────────────────────
+      case _ReelOptionAction.downloadAssets:
+        _showDownloadAssetsSheet();
+        break;
+    }
+  }
+
+  // ── API helper (file upload) ────────────────────────────────
+  Future<Map<String, dynamic>> _postFileApi(
+    String path,
+    String localFilePath, {
+    Map<String, String> extraFields = const {},
+  }) async {
+    final uri = Uri.parse('$_apiBaseUrl$path');
+    final req = http.MultipartRequest('POST', uri);
+    req.files.add(
+      await http.MultipartFile.fromPath('video_file', localFilePath),
+    );
+    req.fields.addAll(extraFields);
+    final streamed = await req.send().timeout(const Duration(seconds: 180));
+    final body = await streamed.stream.bytesToString();
+    return jsonDecode(body) as Map<String, dynamic>;
+  }
+
+  // ── 2. Transcribe sheet + ML Kit translation ────────────────────
+  Future<void> _showTranscribeSheet() async {
+    final videoPath = widget.localImagePath.isNotEmpty
+        ? widget.localImagePath
+        : widget.imageUrl;
+
+    if (!File(videoPath).existsSync()) {
+      UIUtils.showSnackBar(context, 'Video file not found on device');
+      return;
+    }
+
+    // ── Check Cache ──
+    final cachedJson = await _getFromCache('transcribe');
+    if (!mounted) return;
+    if (cachedJson != null) {
+      final data = jsonDecode(cachedJson);
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.white,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => _TranscriptSheet(
+            transcript: data['transcript'],
+            translated: data['translated'],
+            detectedLanguage: data['detected_language'],
+          ),
+        );
+      }
+      return;
+    }
+    // ─────────────────
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _LoadingSheet(
+        message: 'Uploading & transcribing reel…\nThis may take ~30 seconds',
+      ),
+    );
+
+    try {
+      // ── Step 1: Backend Whisper transcription ──
+      final res = await _postFileApi(
+        'transcribe',
+        videoPath,
+        extraFields: {'target_language': 'en'},
+      );
+      if (!mounted) return;
+
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      final transcript = (data['transcript'] as String? ?? '').trim();
+      final translatedVal = (data['translated'] as String? ?? '').trim();
+      final detectedLang = data['detected_language'] as String? ?? 'en';
+
+      if (transcript.isEmpty) {
+        Navigator.of(context).pop();
+        UIUtils.showSnackBar(context, 'No speech detected in this reel');
+        return;
+      }
+
+      // Use backend translation if available, otherwise fallback to local transcript
+      String translated = translatedVal.isNotEmpty ? translatedVal : transcript;
+
+      // ── Save to Cache ──
+      await _saveToCache('transcribe', {
+        'transcript': transcript,
+        'translated': translated,
+        'detected_language': detectedLang,
+      });
+      // ──────────────────
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close loading sheet
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _TranscriptSheet(
+          transcript: transcript,
+          translated: translated,
+          detectedLanguage: detectedLang,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        UIUtils.showSnackBar(context, 'Transcription failed: $e');
+      }
+    }
+  }
+
+  // ── 3. Hook sheet ───────────────────────────────────────────
+  Future<void> _showHookSheet() async {
+    final videoPath = widget.localImagePath.isNotEmpty
+        ? widget.localImagePath
+        : widget.imageUrl;
+
+    if (!File(videoPath).existsSync()) {
+      UIUtils.showSnackBar(context, 'Video file not found on device');
+      return;
+    }
+
+    // ── Check Cache ──
+    final cachedJson = await _getFromCache('hook');
+    if (!mounted) return;
+    if (cachedJson != null) {
+      final data = jsonDecode(cachedJson);
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.white,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => _HookSheet(
+            hookText: data['hook_text'],
+            startTime: data['start_time'],
+            endTime: data['end_time'],
+          ),
+        );
+      }
+      return;
+    }
+    // ─────────────────
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _LoadingSheet(
+        message: 'Uploading & analyzing hook…\nThis may take ~30 seconds',
+      ),
+    );
+
+    try {
+      final res = await _postFileApi('extract_hook', videoPath);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      final hookText = (data['hook_text'] as String? ?? '').trim();
+      final startTime = (data['start_time'] as num? ?? 0).toDouble();
+      final endTime = (data['end_time'] as num? ?? 0).toDouble();
+
+      // ── Save to Cache ──
+      await _saveToCache('hook', {
+        'hook_text': hookText,
+        'start_time': startTime,
+        'end_time': endTime,
+      });
+      // ──────────────────
+
+      if (!mounted) return;
+      if (hookText.isEmpty) {
+        UIUtils.showSnackBar(context, 'Could not identify a hook in this reel');
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _HookSheet(
+          hookText: hookText,
+          startTime: startTime,
+          endTime: endTime,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        UIUtils.showSnackBar(context, 'Hook extraction failed: $e');
+      }
+    }
+  }
+
+  // ── 4. Trendy Captions sheet ────────────────────────────────
+  Future<void> _showTrendyCaptionsSheet(String originalCaption) async {
+    // ── Check Cache ──
+    final cachedJson = await _getFromCache('caption');
+    if (!mounted) return;
+    if (cachedJson != null) {
+      final data = jsonDecode(cachedJson);
+      final mediaPath = widget.localImagePath.isNotEmpty
+          ? widget.localImagePath
+          : widget.imageUrl;
+
+      Future<String?> fetchCaption() async {
+        final res = await _postFileApi(
+          'trendy_captions',
+          mediaPath,
+          extraFields: {'caption': originalCaption},
+        );
+        final innerData = res['data'] as Map<String, dynamic>? ?? {};
+        final caps = (innerData['captions'] as List<dynamic>? ?? [])
+            .map((e) => e.toString())
+            .toList();
+        return caps.isNotEmpty ? caps.first : null;
+      }
+
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.white,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => _TrendyCaptionsSheet(
+            initialCaption: data['caption'],
+            fetchCaption: fetchCaption,
+            onUse: (c) {
+              _captionController.text = c;
+              Clipboard.setData(ClipboardData(text: c));
+              Navigator.of(context).pop();
+              UIUtils.showSnackBar(context, 'Caption applied ✓');
+            },
+          ),
+        );
+      }
+      return;
+    }
+    // ─────────────────
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) =>
+          const _LoadingSheet(message: 'Generating trendy caption…'),
+    );
+
+    final mediaPath = widget.localImagePath.isNotEmpty
+        ? widget.localImagePath
+        : widget.imageUrl;
+
+    Future<String?> fetchCaption() async {
+      final res = await _postFileApi(
+        'trendy_captions',
+        mediaPath,
+        extraFields: {'caption': originalCaption},
+      );
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      final captions = (data['captions'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList();
+      final result = captions.isNotEmpty ? captions.first : null;
+      if (result != null) {
+        await _saveToCache('caption', {'caption': result});
+      }
+      return result;
+    }
+
+    try {
+      final caption = await fetchCaption();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      if (caption == null) {
+        UIUtils.showSnackBar(context, 'Could not generate caption');
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _TrendyCaptionsSheet(
+          initialCaption: caption,
+          fetchCaption: fetchCaption,
+          onUse: (c) {
+            _captionController.text = c;
+            Clipboard.setData(ClipboardData(text: c));
+            Navigator.of(context).pop();
+            UIUtils.showSnackBar(context, 'Caption applied ✓');
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        UIUtils.showSnackBar(context, 'Caption generation failed: $e');
+      }
+    }
+  }
+
+  // ── 5. Trendy Hashtags sheet ────────────────────────────────
+  Future<void> _showTrendyHashtagsSheet(String caption) async {
+    // ── Check Cache ──
+    final cachedJson = await _getFromCache('hashtags');
+    if (!mounted) return;
+    if (cachedJson != null) {
+      final data = jsonDecode(cachedJson);
+      final picks = (data['picks'] as List? ?? []).cast<String>();
+      if (picks.isNotEmpty && mounted) {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.white,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => _TrendyHashtagsSheet(trendyPicks: picks),
+        );
+      }
+      return;
+    }
+    // ─────────────────
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) =>
+          const _LoadingSheet(message: 'Generating trending hashtags…'),
+    );
+
+    try {
+      final mediaPath = widget.localImagePath.isNotEmpty
+          ? widget.localImagePath
+          : widget.imageUrl;
+
+      final res = await _postFileApi(
+        'trendy_hashtags',
+        mediaPath,
+        extraFields: {'caption': caption},
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      final picks = [
+        ...(data['high_reach'] as List<dynamic>? ?? []).map(
+          (e) => e.toString(),
+        ),
+        ...(data['mid_reach'] as List<dynamic>? ?? []).map((e) => e.toString()),
+        ...(data['niche_reach'] as List<dynamic>? ?? []).map(
+          (e) => e.toString(),
+        ),
+      ];
+
+      // ── Save to Cache ──
+      await _saveToCache('hashtags', {'picks': picks});
+      // ──────────────────
+
+      if (!mounted) return;
+      if (picks.isEmpty) {
+        UIUtils.showSnackBar(context, 'Could not generate hashtags');
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _TrendyHashtagsSheet(trendyPicks: picks),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        UIUtils.showSnackBar(context, 'Hashtag generation failed: $e');
+      }
+    }
+  }
+
+  // ── 6. Export as PDF ────────────────────────────────────────
+  void _showExportPdfSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ExportPdfSheet(
+        thumbnailPath: widget.localImagePath,
+        thumbnailUrl: widget.thumbnailUrl,
+        onDownload: _exportAsPdf,
+      ),
+    );
+  }
+
+  void _showDownloadAssetsSheet() {
+    final paths = widget.allMediaPaths.isNotEmpty
+        ? widget.allMediaPaths
+        : [widget.localImagePath];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DownloadAssetsSheet(
+        allMediaPaths: paths,
+        username: widget.username,
+        onDownload: (selectedPaths) async {
+          // Show a simple selection dialog for format
+          final format = await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Choose Format',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: const Text(
+                'How would you like to save the selected items?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'images'),
+                  child: const Text('As Images'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'pdf'),
+                  child: const Text('As one PDF'),
+                ),
+              ],
+            ),
+          );
+
+          if (format == null) return;
+
+          if (format == 'images') {
+            await _saveMultipleImages(selectedPaths);
+          } else {
+            await _saveImagesAsPdf(selectedPaths);
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _saveMultipleImages(List<String> paths) async {
+    int count = 0;
+    for (final path in paths) {
+      try {
+        final String? uriString = await _mediaStoreChannel.invokeMethod<String>(
+          'saveMedia',
+          {'path': path, 'mediaType': 'image'},
+        );
+        if (uriString != null) count++;
+      } catch (e) {
+        debugPrint('Failed to save image $path: $e');
+      }
+    }
+
+    if (mounted) {
+      UIUtils.showSnackBar(context, '$count images saved to gallery ✓');
+    }
+  }
+
+  Future<void> _saveImagesAsPdf(List<String> paths) async {
+    try {
+      UIUtils.showSnackBar(context, 'Generating PDF…');
+      final doc = pw.Document();
+
+      for (final path in paths) {
+        final bytes = await File(path).readAsBytes();
+        final image = pw.MemoryImage(bytes);
+        doc.addPage(
+          pw.Page(
+            build: (pw.Context context) {
+              return pw.Center(child: pw.Image(image));
+            },
+          ),
+        );
+      }
+
+      final pdfBytes = await doc.save();
+      final tempDir = await getTemporaryDirectory();
+      final fileName =
+          'insta_images_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(pdfBytes);
+
+      final String? uriString = await _mediaStoreChannel.invokeMethod<String>(
+        'saveMedia',
+        {'path': file.path, 'mediaType': 'pdf'},
+      );
+
+      if (mounted) {
+        if (uriString != null) {
+          UIUtils.showSnackBar(context, 'PDF saved to gallery ✓');
+        } else {
+          UIUtils.showSnackBar(context, 'Failed to save PDF');
+        }
+      }
+    } catch (e) {
+      debugPrint('PDF generation failed: $e');
+      if (mounted) {
+        UIUtils.showSnackBar(context, 'PDF generation failed');
+      }
+    }
+  }
+
+  Future<void> _exportAsPdf() async {
+    try {
+      UIUtils.showSnackBar(context, 'Preparing PDF…');
+      final report = await _loadReelReportData();
+      final pdfBytes = await _buildReelReportPdf(report);
+      final date = DateTime.now();
+      final dateStr = '${date.day}-${date.month}-${date.year}';
+      final username = widget.username.replaceAll('@', '').trim();
+      final filename =
+          '${username.isEmpty ? 'reel' : username}_report_$dateStr.pdf';
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _ReelReportPreviewScreen(
+            pdfBytes: pdfBytes,
+            filename: filename,
+            title: report.title,
+            subtitle: '6 pages · creator deliverable',
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('PDF export failed: $e');
+      if (mounted) {
+        UIUtils.showSnackBar(context, 'PDF export failed. Please try again.');
+      }
+    }
+  }
+
+  Future<_ReelReportData> _loadReelReportData() async {
+    Map<String, dynamic> decodeCache(String? jsonString) {
+      if (jsonString == null || jsonString.trim().isEmpty) {
+        return <String, dynamic>{};
+      }
+      try {
+        final decoded = jsonDecode(jsonString);
+        return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+      } catch (_) {
+        return <String, dynamic>{};
+      }
+    }
+
+    final cached = await Future.wait([
+      _getFromCache('transcribe'),
+      _getFromCache('hook'),
+      _getFromCache('caption'),
+      _getFromCache('hashtags'),
+    ]);
+
+    final transcribeData = decodeCache(cached[0]);
+    final hookData = decodeCache(cached[1]);
+    final captionData = decodeCache(cached[2]);
+    final hashtagData = decodeCache(cached[3]);
+
+    final originalCaption = widget.initialCaption.trim();
+    final currentCaption = _captionController.text.trim();
+    final trendyCaption = (captionData['caption'] as String? ?? '').trim();
+    final transcript = (transcribeData['transcript'] as String? ?? '').trim();
+    final translated = (transcribeData['translated'] as String? ?? '').trim();
+    final detectedLanguage =
+        (transcribeData['detected_language'] as String? ?? 'unknown').trim();
+    final hookText = (hookData['hook_text'] as String? ?? '').trim();
+    final hookStart = (hookData['start_time'] as num? ?? 0).toDouble();
+    final hookEnd = (hookData['end_time'] as num? ?? 0).toDouble();
+
+    final cachedHashtags = (hashtagData['picks'] as List? ?? [])
+        .map((item) => item.toString().trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+    final hashtags = cachedHashtags.isNotEmpty
+        ? cachedHashtags
+        : _extractHashtags('$originalCaption $currentCaption $trendyCaption');
+
+    final reportText = [
+      originalCaption,
+      currentCaption,
+      trendyCaption,
+      transcript,
+      translated,
+      hookText,
+      hashtags.join(' '),
+    ].join(' ');
+
+    return _ReelReportData(
+      username: widget.username,
+      title: _buildReportTitle(originalCaption, currentCaption),
+      originalCaption: originalCaption,
+      currentCaption: currentCaption,
+      trendyCaption: trendyCaption,
+      transcript: transcript,
+      translated: translated,
+      detectedLanguage: detectedLanguage.isEmpty ? 'unknown' : detectedLanguage,
+      hookText: hookText,
+      hookStart: hookStart,
+      hookEnd: hookEnd,
+      hashtags: hashtags,
+      keywords: _extractKeywords(reportText),
+      thumbnailBytes: await _loadReportThumbnailBytes(),
+    );
+  }
+
+  String _buildReportTitle(String originalCaption, String currentCaption) {
+    final source = currentCaption.isNotEmpty ? currentCaption : originalCaption;
+    final words = source
+        .replaceAll(RegExp(r'https?://\S+'), '')
+        .replaceAll(RegExp(r'#\w+'), '')
+        .split(RegExp(r'\s+'))
+        .where((word) => word.trim().length > 2)
+        .take(4)
+        .join(' ');
+
+    if (words.isNotEmpty) {
+      return 'Reel Report - $words';
+    }
+
+    final cleanUser = widget.username.replaceAll('@', '').trim();
+    return cleanUser.isEmpty ? 'Reel Report' : 'Reel Report - @$cleanUser';
+  }
+
+  List<String> _extractHashtags(String text) {
+    final matches = RegExp(r'#[A-Za-z0-9_]+').allMatches(text);
+    final seen = <String>{};
+    final tags = <String>[];
+    for (final match in matches) {
+      final tag = match.group(0);
+      if (tag == null) continue;
+      final normalized = tag.toLowerCase();
+      if (seen.add(normalized)) tags.add(tag);
+    }
+    return tags;
+  }
+
+  List<String> _extractKeywords(String text) {
+    const stopWords = {
+      'about',
+      'after',
+      'again',
+      'also',
+      'and',
+      'are',
+      'because',
+      'been',
+      'but',
+      'can',
+      'for',
+      'from',
+      'have',
+      'here',
+      'into',
+      'just',
+      'like',
+      'more',
+      'not',
+      'our',
+      'out',
+      'that',
+      'the',
+      'this',
+      'was',
+      'what',
+      'when',
+      'with',
+      'your',
+    };
+
+    final counts = <String, int>{};
+    final words = text
+        .toLowerCase()
+        .replaceAll(RegExp(r'https?://\S+'), ' ')
+        .split(RegExp(r'[^a-z0-9#]+'))
+        .where((word) => word.length > 3 && !stopWords.contains(word));
+
+    for (final word in words) {
+      final cleaned = word.startsWith('#') ? word.substring(1) : word;
+      if (cleaned.length <= 3) continue;
+      counts[cleaned] = (counts[cleaned] ?? 0) + 1;
+    }
+
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(8).map((entry) => entry.key).toList();
+  }
+
+  Future<Uint8List?> _loadReportThumbnailBytes() async {
+    final candidates = [
+      if (widget.thumbnailUrl.isNotEmpty) widget.thumbnailUrl,
+      if (widget.localImagePath.isNotEmpty) widget.localImagePath,
+      if (widget.imageUrl.isNotEmpty) widget.imageUrl,
+    ];
+
+    for (final candidate in candidates) {
+      try {
+        if (candidate.startsWith('http')) {
+          final response = await http
+              .get(Uri.parse(candidate))
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+            return response.bodyBytes;
+          }
+          continue;
+        }
+
+        final file = File(candidate);
+        if (file.existsSync() &&
+            !candidate.toLowerCase().endsWith('.mp4') &&
+            !candidate.toLowerCase().endsWith('.mov')) {
+          return await file.readAsBytes();
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  Future<List<pw.Font>> _loadPdfFallbackFonts() async {
+    final fonts = <pw.Font>[];
+
+    Future<void> addFont(Future<pw.Font> Function() loader) async {
+      try {
+        fonts.add(await loader());
+      } catch (e) {
+        debugPrint('PDF fallback font load skipped: $e');
+      }
+    }
+
+    await addFont(PdfGoogleFonts.notoSansRegular);
+    await addFont(PdfGoogleFonts.notoSansDevanagariRegular);
+    await addFont(PdfGoogleFonts.notoSansGujaratiRegular);
+    await addFont(PdfGoogleFonts.notoSansArabicRegular);
+    await addFont(PdfGoogleFonts.notoSansBengaliRegular);
+    await addFont(PdfGoogleFonts.notoSansTamilRegular);
+    await addFont(PdfGoogleFonts.notoSansTeluguRegular);
+    await addFont(PdfGoogleFonts.notoColorEmojiRegular);
+
+    return fonts;
+  }
+
+  String _sanitizePdfText(String value) {
+    final buffer = StringBuffer();
+    for (final rune in value.runes) {
+      final isAscii = rune >= 0x20 && rune <= 0x7E;
+      final isLatinExtended = rune >= 0x00A0 && rune <= 0x024F;
+      final isCommonPunctuation =
+          rune == 0x2013 ||
+          rune == 0x2014 ||
+          rune == 0x2018 ||
+          rune == 0x2019 ||
+          rune == 0x201C ||
+          rune == 0x201D ||
+          rune == 0x2022 ||
+          rune == 0x2026 ||
+          rune == 0x00B7;
+
+      if (isAscii || isLatinExtended || isCommonPunctuation) {
+        buffer.writeCharCode(rune);
+      } else if (rune == 0x0A || rune == 0x0D || rune == 0x09) {
+        buffer.writeCharCode(rune);
+      } else {
+        buffer.write(' ');
+      }
+    }
+
+    return buffer.toString().replaceAll(RegExp(r'[ \t]+'), ' ').trim();
+  }
+
+  String _stripPdfEmoji(String value) {
+    final buffer = StringBuffer();
+    for (final rune in value.runes) {
+      final isEmojiOrPictograph =
+          (rune >= 0x1F000 && rune <= 0x1FAFF) ||
+          (rune >= 0x2600 && rune <= 0x27BF) ||
+          rune == 0xFE0F;
+      if (!isEmojiOrPictograph) {
+        buffer.writeCharCode(rune);
+      }
+    }
+    return buffer.toString().replaceAll(RegExp(r'[ \t]+'), ' ').trim();
+  }
+
+  Future<Uint8List> _buildReelReportPdf(_ReelReportData report) async {
+    final doc = pw.Document();
+    final boldFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Roboto-Bold.ttf'),
+    );
+    final scriptFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Lobster-Regular.ttf'),
+    );
+    final fallbackFonts = await _loadPdfFallbackFonts();
+    final canRenderExtendedText = fallbackFonts.isNotEmpty;
+    final baseTheme = pw.ThemeData.withFont(
+      base: boldFont,
+      bold: boldFont,
+      italic: scriptFont,
+      boldItalic: scriptFont,
+      fontFallback: fallbackFonts,
+    );
+
+    const pageFormat = PdfPageFormat.a4;
+    const bg = PdfColor.fromInt(0xFFF2EFE6);
+    const ink = PdfColor.fromInt(0xFF161616);
+    const muted = PdfColor.fromInt(0xFF74706A);
+    const line = PdfColor.fromInt(0xFFE0D8C8);
+    const salmon = PdfColor.fromInt(0xFFFF8D84);
+    final pageWidth = pageFormat.width;
+    final pageHeight = pageFormat.height;
+    final pageContentWidth = pageWidth - 60;
+    final cardContentWidth = pageContentWidth - 44;
+
+    String pdfText(String value) =>
+        canRenderExtendedText ? _stripPdfEmoji(value) : _sanitizePdfText(value);
+
+    String safe(String value, String fallback) {
+      final text = value.trim().isEmpty ? fallback : value.trim();
+      return pdfText(text);
+    }
+
+    String time(double seconds) {
+      final minutes = seconds ~/ 60;
+      final secs = (seconds % 60).round().toString().padLeft(2, '0');
+      return '$minutes:$secs';
+    }
+
+    pw.Widget label(String text) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: pw.BoxDecoration(
+          color: ink,
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+        ),
+        child: pw.Text(
+          text,
+          style: const pw.TextStyle(
+            color: PdfColors.white,
+            fontSize: 8,
+            letterSpacing: 1,
+          ),
+        ),
+      );
+    }
+
+    pw.Widget scriptTitle(String text, {double size = 20}) {
+      return pw.Text(
+        pdfText(text),
+        style: pw.TextStyle(
+          font: scriptFont,
+          fontSize: size,
+          color: ink,
+          fontWeight: pw.FontWeight.normal,
+        ),
+      );
+    }
+
+    pw.Widget pageShell({
+      required int page,
+      required pw.Widget child,
+      bool dark = false,
+    }) {
+      return pw.SizedBox(
+        width: pageWidth,
+        height: pageHeight,
+        child: pw.Container(
+          color: bg,
+          padding: const pw.EdgeInsets.all(30),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Container(
+                  width: pageContentWidth,
+                  padding: const pw.EdgeInsets.all(22),
+                  decoration: pw.BoxDecoration(
+                    color: dark ? ink : PdfColors.white,
+                    borderRadius: const pw.BorderRadius.all(
+                      pw.Radius.circular(8),
+                    ),
+                    border: pw.Border.all(
+                      color: dark ? ink : line,
+                      width: dark ? 0 : 1,
+                    ),
+                  ),
+                  child: child,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Generated with ${Constants.appName} · Pro',
+                    style: const pw.TextStyle(fontSize: 8, color: muted),
+                  ),
+                  pw.Text(
+                    '$page / 6',
+                    style: const pw.TextStyle(fontSize: 8, color: muted),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    pw.Widget statCard(String label, String value) {
+      return pw.Container(
+        width: 220,
+        padding: const pw.EdgeInsets.all(12),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.white,
+          border: pw.Border.all(color: ink, width: 0.8),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              label.toUpperCase(),
+              style: const pw.TextStyle(fontSize: 7, color: muted),
+            ),
+            pw.SizedBox(height: 5),
+            pw.Text(
+              pdfText(value),
+              style: pw.TextStyle(font: scriptFont, fontSize: 18),
+            ),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget borderedText(String title, String text) {
+      return pw.Container(
+        width: cardContentWidth,
+        padding: const pw.EdgeInsets.all(12),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: ink, width: 0.8),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              title,
+              style: const pw.TextStyle(fontSize: 8, color: muted),
+            ),
+            pw.SizedBox(height: 7),
+            pw.Text(
+              safe(
+                text,
+                'No local data saved yet. Generate this item from the reel first.',
+              ),
+              style: const pw.TextStyle(fontSize: 11, height: 1.45),
+            ),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget hashtagWrap(List<String> tags) {
+      final items = tags.isEmpty
+          ? ['No local hashtags saved yet']
+          : tags.take(24).toList();
+      return pw.Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: items
+            .map(
+              (tag) => pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: ink, width: 0.8),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(12),
+                  ),
+                ),
+                child: pw.Text(
+                  pdfText(tag),
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    pw.Widget keywordTable() {
+      final keywords = report.keywords.isEmpty
+          ? ['caption', 'reel', 'creator']
+          : report.keywords.take(6).toList();
+      return pw.Table(
+        border: pw.TableBorder.all(color: line, width: 0.7),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(2),
+          1: pw.FlexColumnWidth(1),
+          2: pw.FlexColumnWidth(1),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: ink),
+            children: ['KEYWORD', 'SOURCE', 'INTENT']
+                .map(
+                  (text) => pw.Padding(
+                    padding: const pw.EdgeInsets.all(7),
+                    child: pw.Text(
+                      text,
+                      style: const pw.TextStyle(
+                        color: PdfColors.white,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          ...keywords.map(
+            (keyword) => pw.TableRow(
+              children:
+                  [
+                        keyword,
+                        report.hashtags.any(
+                              (tag) => tag.toLowerCase().contains(
+                                keyword.toLowerCase(),
+                              ),
+                            )
+                            ? 'Hashtag'
+                            : 'Caption',
+                        'Social',
+                      ]
+                      .map(
+                        (text) => pw.Padding(
+                          padding: const pw.EdgeInsets.all(7),
+                          child: pw.Text(
+                            pdfText(text),
+                            style: const pw.TextStyle(fontSize: 9),
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
+        ],
+      );
+    }
+
+    pw.Widget reportHeader(String title) {
+      return pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              scriptTitle(title, size: 18),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                pdfText(
+                  'By ${report.username.isEmpty ? '@creator' : report.username} · ${DateTime.now().month}/${DateTime.now().year}',
+                ),
+                style: const pw.TextStyle(fontSize: 9, color: muted),
+              ),
+            ],
+          ),
+          pw.Text(
+            'creator deliverable',
+            style: const pw.TextStyle(fontSize: 9, color: muted),
+          ),
+        ],
+      );
+    }
+
+    doc.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          theme: baseTheme,
+        ),
+        build: (_) => pageShell(
+          page: 1,
+          dark: true,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              label('REEL REPORT · 2026'),
+              pw.SizedBox(height: 34),
+              pw.Text(
+                'Reel report.',
+                style: pw.TextStyle(
+                  font: scriptFont,
+                  fontSize: 40,
+                  color: PdfColors.white,
+                ),
+              ),
+              pw.Text(
+                safe(
+                  report.title.replaceFirst('Reel Report - ', ''),
+                  'Creator insights.',
+                ),
+                style: pw.TextStyle(
+                  font: scriptFont,
+                  fontSize: 32,
+                  color: salmon,
+                ),
+              ),
+              pw.SizedBox(height: 14),
+              pw.Text(
+                pdfText(
+                  'By ${report.username.isEmpty ? '@creator' : report.username} · local AI report',
+                ),
+                style: const pw.TextStyle(fontSize: 11, color: PdfColors.white),
+              ),
+              if (report.thumbnailBytes != null) ...[
+                pw.SizedBox(height: 24),
+                pw.ClipRRect(
+                  horizontalRadius: 8,
+                  verticalRadius: 8,
+                  child: pw.Image(
+                    pw.MemoryImage(report.thumbnailBytes!),
+                    height: 190,
+                    width: cardContentWidth,
+                    fit: pw.BoxFit.cover,
+                  ),
+                ),
+              ],
+              pw.Spacer(),
+              pw.Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  statCard(
+                    'Hook timing',
+                    report.hookText.isEmpty
+                        ? 'Not saved'
+                        : '${time(report.hookStart)} - ${time(report.hookEnd)}',
+                  ),
+                  statCard(
+                    'Transcript words',
+                    report.transcript.isEmpty
+                        ? 'Not saved'
+                        : report.transcript
+                              .split(RegExp(r'\s+'))
+                              .length
+                              .toString(),
+                  ),
+                  statCard(
+                    'Caption words',
+                    safe(report.currentCaption, report.originalCaption)
+                        .split(RegExp(r'\s+'))
+                        .where((word) => word.trim().isNotEmpty)
+                        .length
+                        .toString(),
+                  ),
+                  statCard(
+                    'Hashtags',
+                    report.hashtags.isEmpty
+                        ? 'Not saved'
+                        : report.hashtags.length.toString(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    doc.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          theme: baseTheme,
+        ),
+        build: (_) => pageShell(
+          page: 2,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              reportHeader(report.title),
+              pw.SizedBox(height: 24),
+              label('01 · THE HOOK'),
+              pw.SizedBox(height: 18),
+              scriptTitle(
+                report.hookText.isEmpty
+                    ? 'Hook not generated yet'
+                    : '${time(report.hookStart)} - ${time(report.hookEnd)}',
+                size: 26,
+              ),
+              pw.SizedBox(height: 12),
+              pw.Container(
+                width: cardContentWidth,
+                padding: const pw.EdgeInsets.all(16),
+                decoration: pw.BoxDecoration(
+                  color: ink,
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(8),
+                  ),
+                ),
+                child: pw.Text(
+                  safe(
+                    report.hookText,
+                    'Generate Hook Timing from this reel to include the exact attention-grabbing moment.',
+                  ),
+                  style: const pw.TextStyle(
+                    color: PdfColors.white,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 24),
+              scriptTitle('Why it works', size: 18),
+              pw.SizedBox(height: 10),
+              ...[
+                'Places the strongest line in the first seconds of the reel.',
+                'Gives editors a precise timing window to reuse or highlight.',
+                'Connects the hook with caption and hashtag strategy below.',
+              ].map(
+                (item) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 8),
+                  child: pw.Bullet(
+                    text: item,
+                    style: const pw.TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    doc.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          theme: baseTheme,
+        ),
+        build: (_) => pageShell(
+          page: 3,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              reportHeader(report.title),
+              pw.SizedBox(height: 22),
+              label('02 · TRANSCRIPTION'),
+              pw.SizedBox(height: 14),
+              borderedText('Original transcript', report.transcript),
+              pw.SizedBox(height: 18),
+              scriptTitle('Translations', size: 18),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Detected language: ${safe(report.detectedLanguage, 'unknown')}',
+                style: const pw.TextStyle(fontSize: 9, color: muted),
+              ),
+              pw.SizedBox(height: 8),
+              borderedText('Saved translation', report.translated),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    doc.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          theme: baseTheme,
+        ),
+        build: (_) => pageShell(
+          page: 4,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              reportHeader(report.title),
+              pw.SizedBox(height: 22),
+              label('03 · TRENDY CAPTIONS'),
+              pw.SizedBox(height: 14),
+              scriptTitle('Original caption', size: 18),
+              pw.SizedBox(height: 8),
+              borderedText('Fetched caption', report.originalCaption),
+              pw.SizedBox(height: 16),
+              scriptTitle('Selected caption', size: 18),
+              pw.SizedBox(height: 8),
+              borderedText(
+                'Caption currently on edit screen',
+                safe(report.currentCaption, report.trendyCaption),
+              ),
+              pw.SizedBox(height: 16),
+              borderedText('Generated trendy caption', report.trendyCaption),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    doc.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          theme: baseTheme,
+        ),
+        build: (_) => pageShell(
+          page: 5,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              reportHeader(report.title),
+              pw.SizedBox(height: 22),
+              label('04 · KEYWORDS'),
+              pw.SizedBox(height: 14),
+              scriptTitle('Primary keywords', size: 18),
+              pw.SizedBox(height: 10),
+              keywordTable(),
+              pw.SizedBox(height: 20),
+              scriptTitle('Long-tail opportunities', size: 18),
+              pw.SizedBox(height: 10),
+              pw.Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    (report.keywords.isEmpty
+                            ? [
+                                'reel ideas',
+                                'creator caption',
+                                'instagram growth',
+                              ]
+                            : report.keywords
+                                  .take(5)
+                                  .map((keyword) => '$keyword reel ideas'))
+                        .map(
+                          (keyword) => pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: pw.BoxDecoration(
+                              border: pw.Border.all(color: ink, width: 0.8),
+                              borderRadius: const pw.BorderRadius.all(
+                                pw.Radius.circular(14),
+                              ),
+                            ),
+                            child: pw.Text(
+                              keyword,
+                              style: const pw.TextStyle(fontSize: 9),
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    doc.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          theme: baseTheme,
+        ),
+        build: (_) => pageShell(
+          page: 6,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              reportHeader(report.title),
+              pw.SizedBox(height: 22),
+              label('05 · HASHTAGS + POSTING PLAN'),
+              pw.SizedBox(height: 14),
+              scriptTitle('Trending hashtags', size: 18),
+              pw.SizedBox(height: 10),
+              hashtagWrap(report.hashtags),
+              pw.SizedBox(height: 22),
+              pw.Row(
+                children: [
+                  pw.Expanded(child: statCard('Best time', 'Tue · 7-9pm IST')),
+                  pw.SizedBox(width: 12),
+                  pw.Expanded(
+                    child: statCard(
+                      'CTA ideas',
+                      report.hookText.isEmpty ? '3' : '5',
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 22),
+              scriptTitle('CTA ideas', size: 18),
+              pw.SizedBox(height: 10),
+              ...[
+                'Save this post for your next reel plan.',
+                'Comment the keyword if you want the full itinerary.',
+                'Tag someone who needs this creator breakdown.',
+              ].map(
+                (item) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 8),
+                  child: pw.Bullet(
+                    text: item,
+                    style: const pw.TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+              pw.Spacer(),
+              pw.Divider(color: line),
+              pw.Text(
+                'insta.save/pro · built from locally saved reel analysis',
+                style: const pw.TextStyle(fontSize: 8, color: muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return doc.save();
+  }
+
   Future<void> _deletePostFromList() async {
     // 1. Stop playback and remove from UI immediately to avoid "Bad state" errors
     if (_videoController != null) {
@@ -571,6 +2235,7 @@ class _RepostScreenState extends State<RepostScreen>
                   _buildMediaPreview(),
                   _buildToolbar(),
                   _buildCaptionSection(),
+                  _buildCreateFromReelSection(),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -901,67 +2566,237 @@ class _RepostScreenState extends State<RepostScreen>
   Widget _buildCaptionSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF7F7F7),
-          borderRadius: BorderRadius.circular(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Caption:",
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _captionController,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 15, color: Colors.black87),
+                    decoration: InputDecoration(
+                      hintText:
+                          "Original by: ${widget.username.isEmpty ? '@' : widget.username}",
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    if (_captionController.text.isNotEmpty) {
+                      Clipboard.setData(
+                        ClipboardData(text: _captionController.text),
+                      );
+                      UIUtils.showSnackBar(
+                        context,
+                        "Caption copied to clipboard",
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF636363),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.copy_all_outlined,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          "Copy",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _optionAccentColor(_ReelOptionAction action) {
+    switch (action) {
+      case _ReelOptionAction.originalCaption:
+        return const Color(0xFF6C63FF);
+      case _ReelOptionAction.transcribeTranslate:
+        return const Color(0xFF00BCD4);
+      case _ReelOptionAction.hookTiming:
+        return const Color(0xFFFF9800);
+      case _ReelOptionAction.trendyCaptions:
+        return const Color(0xFF4CAF50);
+      case _ReelOptionAction.trendyHashtags:
+        return const Color(0xFF2196F3);
+      case _ReelOptionAction.exportPdf:
+        return const Color(0xFFE91E63);
+      case _ReelOptionAction.downloadAssets:
+        return const Color(0xFF9C27B0);
+    }
+  }
+
+  Widget _buildCreateFromReelSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: Text(
+            "Create from reel",
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _captionController,
-                maxLines: 2,
-                style: const TextStyle(fontSize: 15, color: Colors.black87),
-                decoration: const InputDecoration(
-                  hintText: "Enter caption...",
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
+        SizedBox(
+          height: 150,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _reelCreationOptions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              return _buildReelOptionCard(_reelCreationOptions[index]);
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildReelOptionCard(_ReelCreationOption option) {
+    final bool isDisabledForImage =
+        !_isVideo &&
+        (option.action == _ReelOptionAction.transcribeTranslate ||
+            option.action == _ReelOptionAction.hookTiming);
+    final bool isDisabledForVideo =
+        _isVideo && (option.action == _ReelOptionAction.downloadAssets);
+    final bool isDisabled = isDisabledForImage || isDisabledForVideo;
+
+    final color = _optionAccentColor(option.action);
+
+    return GestureDetector(
+      onTap: isDisabled ? null : () => _handleReelOptionTap(option),
+      child: AnimatedOpacity(
+        opacity: isDisabled ? 0.38 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          width: 125,
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 16, 8, 10),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(option.icon, size: 22, color: color),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        option.title,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDisabled ? Colors.grey : Colors.black87,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {
-                if (_captionController.text.isNotEmpty) {
-                  Clipboard.setData(
-                    ClipboardData(text: _captionController.text),
-                  );
-                  UIUtils.showSnackBar(context, "Caption copied to clipboard");
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF636363),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.copy_all_outlined,
-                      size: 18,
-                      color: Colors.white,
+              if (option.isPro && !isDisabled)
+                Positioned(
+                  top: -9,
+                  right: 7,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
                     ),
-                    SizedBox(width: 6),
-                    Text(
-                      "Copy",
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF9500), Color(0xFFFF4B2B)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      color: color,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      "PRO",
                       style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1098,6 +2933,1102 @@ class _RepostScreenState extends State<RepostScreen>
     );
   }
 }
+
+// =============================================================================
+// 🔹 Bottom Sheet Widgets
+// =============================================================================
+
+// ── Loading sheet ──────────────────────────────────────────────────────────
+class _LoadingSheet extends StatefulWidget {
+  final String message;
+  const _LoadingSheet({required this.message});
+
+  @override
+  State<_LoadingSheet> createState() => _LoadingSheetState();
+}
+
+class _LoadingSheetState extends State<_LoadingSheet>
+    with TickerProviderStateMixin {
+  late final AnimationController _dotController;
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _dotController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _dotController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = widget.message.split('\n');
+    final headline = lines.first;
+    final subtitle = lines.length > 1 ? lines.sublist(1).join('\n') : null;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 32),
+          // Animated icon ring
+          ScaleTransition(
+            scale: _pulseAnimation,
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A1A1A), Color(0xFF3D3D3D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          // Headline
+          Text(
+            headline,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+              height: 1.3,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
+            ),
+          ],
+          const SizedBox(height: 28),
+          // Animated dots
+          AnimatedBuilder(
+            animation: _dotController,
+            builder: (context, _) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (i) {
+                  final delay = i / 3;
+                  final t = (_dotController.value - delay).clamp(0.0, 1.0);
+                  final scale =
+                      (t < 0.5
+                              ? Curves.easeOut.transform(t * 2)
+                              : Curves.easeIn.transform((1 - t) * 2))
+                          .clamp(0.4, 1.0);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    child: Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color.lerp(
+                            const Color(0xFFCCCCCC),
+                            const Color(0xFF1A1A1A),
+                            scale,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Transcript sheet ───────────────────────────────────────────────────────
+class _TranscriptSheet extends StatefulWidget {
+  final String transcript;
+  final String translated;
+  final String detectedLanguage;
+
+  const _TranscriptSheet({
+    required this.transcript,
+    required this.translated,
+    required this.detectedLanguage,
+  });
+
+  @override
+  State<_TranscriptSheet> createState() => _TranscriptSheetState();
+}
+
+class _TranscriptSheetState extends State<_TranscriptSheet> {
+  static const List<MapEntry<String, TranslateLanguage>> _targetLanguages = [
+    MapEntry('English', TranslateLanguage.english),
+    MapEntry('Hindi', TranslateLanguage.hindi),
+    MapEntry('Spanish', TranslateLanguage.spanish),
+    MapEntry('French', TranslateLanguage.french),
+    MapEntry('German', TranslateLanguage.german),
+    MapEntry('Arabic', TranslateLanguage.arabic),
+    MapEntry('Portuguese', TranslateLanguage.portuguese),
+    MapEntry('Russian', TranslateLanguage.russian),
+    MapEntry('Chinese', TranslateLanguage.chinese),
+    MapEntry('Japanese', TranslateLanguage.japanese),
+    MapEntry('Korean', TranslateLanguage.korean),
+    MapEntry('Italian', TranslateLanguage.italian),
+    MapEntry('Turkish', TranslateLanguage.turkish),
+    MapEntry('Indonesian', TranslateLanguage.indonesian),
+    MapEntry('Bengali', TranslateLanguage.bengali),
+    MapEntry('Tamil', TranslateLanguage.tamil),
+    MapEntry('Telugu', TranslateLanguage.telugu),
+  ];
+
+  late TranslateLanguage _targetLang;
+  late String _currentTranslation;
+  bool _isTranslating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final isSourceEnglish = widget.detectedLanguage == 'en';
+    _targetLang = isSourceEnglish
+        ? TranslateLanguage.hindi
+        : TranslateLanguage.english;
+    _currentTranslation = '';
+    WidgetsBinding.instance.addPostFrameCallback((_) => _retranslate());
+  }
+
+  TranslateLanguage _whisperToMlkit(String code) {
+    final map = <String, TranslateLanguage>{
+      'en': TranslateLanguage.english,
+      'hi': TranslateLanguage.hindi,
+      'ar': TranslateLanguage.arabic,
+      'es': TranslateLanguage.spanish,
+      'fr': TranslateLanguage.french,
+      'de': TranslateLanguage.german,
+      'pt': TranslateLanguage.portuguese,
+      'ru': TranslateLanguage.russian,
+      'zh': TranslateLanguage.chinese,
+      'ja': TranslateLanguage.japanese,
+      'ko': TranslateLanguage.korean,
+      'it': TranslateLanguage.italian,
+      'tr': TranslateLanguage.turkish,
+      'pl': TranslateLanguage.polish,
+      'nl': TranslateLanguage.dutch,
+      'sv': TranslateLanguage.swedish,
+      'cs': TranslateLanguage.czech,
+      'id': TranslateLanguage.indonesian,
+      'uk': TranslateLanguage.ukrainian,
+      'gu': TranslateLanguage.gujarati,
+      'ta': TranslateLanguage.tamil,
+      'te': TranslateLanguage.telugu,
+      'bn': TranslateLanguage.bengali,
+    };
+    return map[code] ?? TranslateLanguage.english;
+  }
+
+  Future<void> _retranslate() async {
+    final srcLang = _whisperToMlkit(widget.detectedLanguage);
+    if (srcLang == _targetLang) {
+      if (mounted) {
+        setState(() {
+          _currentTranslation = widget.transcript;
+          _isTranslating = false;
+        });
+      }
+      return;
+    }
+
+    setState(() => _isTranslating = true);
+    OnDeviceTranslator? translator;
+    try {
+      final modelManager = OnDeviceTranslatorModelManager();
+      if (!await modelManager.isModelDownloaded(srcLang.bcpCode)) {
+        await modelManager.downloadModel(srcLang.bcpCode);
+      }
+      if (!await modelManager.isModelDownloaded(_targetLang.bcpCode)) {
+        if (mounted) {
+          UIUtils.showSnackBar(
+            context,
+            '📥 Downloading ${_labelFor(_targetLang)} model…',
+          );
+        }
+        await modelManager.downloadModel(_targetLang.bcpCode);
+      }
+      translator = OnDeviceTranslator(
+        sourceLanguage: srcLang,
+        targetLanguage: _targetLang,
+      );
+      final out = await translator.translateText(widget.transcript);
+      if (mounted) {
+        setState(() {
+          _currentTranslation = out;
+          _isTranslating = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _currentTranslation = 'Translation failed: $e';
+          _isTranslating = false;
+        });
+      }
+    } finally {
+      translator?.close();
+    }
+  }
+
+  String _labelFor(TranslateLanguage lang) {
+    return _targetLanguages
+        .firstWhere(
+          (e) => e.value == lang,
+          orElse: () => const MapEntry('Selected', TranslateLanguage.english),
+        )
+        .key;
+  }
+
+  void _copy(String text) {
+    if (text.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: text));
+    UIUtils.showSnackBar(context, 'Copied to clipboard ✓');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, sc) => Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Transcribe',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: sc,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Transcription',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _TextBox(
+                        text: widget.transcript,
+                        onCopy: () => _copy(widget.transcript),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Translate as per your preference',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildLanguageDropdown(),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Translation in ${_labelFor(_targetLang)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _TextBox(
+                        text: _isTranslating
+                            ? 'Translating…'
+                            : _currentTranslation,
+                        onCopy: () => _copy(_currentTranslation),
+                        isLoading: _isTranslating,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<TranslateLanguage>(
+          dropdownColor: Colors.white,
+          isExpanded: true,
+          value: _targetLang,
+          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black54),
+          style: const TextStyle(fontSize: 16, color: Colors.black),
+          items: _targetLanguages
+              .map((e) => DropdownMenuItem(value: e.value, child: Text(e.key)))
+              .toList(),
+          onChanged: _isTranslating
+              ? null
+              : (v) {
+                  if (v == null || v == _targetLang) return;
+                  setState(() => _targetLang = v);
+                  _retranslate();
+                },
+        ),
+      ),
+    );
+  }
+}
+
+class _TextBox extends StatelessWidget {
+  final String text;
+  final VoidCallback onCopy;
+  final bool isLoading;
+  const _TextBox({
+    required this.text,
+    required this.onCopy,
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.5,
+                color: isLoading ? Colors.black54 : Colors.black87,
+                fontStyle: isLoading ? FontStyle.italic : FontStyle.normal,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: isLoading ? null : onCopy,
+            child: Icon(
+              Icons.copy_outlined,
+              size: 18,
+              color: isLoading ? Colors.grey.shade400 : Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Hook sheet ─────────────────────────────────────────────────────────────
+class _HookSheet extends StatelessWidget {
+  final String hookText;
+  final double startTime;
+  final double endTime;
+
+  const _HookSheet({
+    required this.hookText,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  String _fmt(double t) {
+    final m = (t ~/ 60).toString();
+    final s = (t % 60).round().toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Hook',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade400),
+                  ),
+                  child: const Icon(Icons.close, size: 18, color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Hook step',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'The moment that grabs attention in the first seconds.',
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${_fmt(startTime)} - ${_fmt(endTime)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Extracted hook content',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _TextBox(
+            text: hookText,
+            onCopy: () {
+              Clipboard.setData(ClipboardData(text: hookText));
+              UIUtils.showSnackBar(context, 'Hook copied ✓');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Trendy Captions sheet ──────────────────────────────────────────────────
+class _TrendyCaptionsSheet extends StatefulWidget {
+  final String initialCaption;
+  final Future<String?> Function() fetchCaption;
+  final void Function(String) onUse;
+
+  const _TrendyCaptionsSheet({
+    required this.initialCaption,
+    required this.fetchCaption,
+    required this.onUse,
+  });
+
+  @override
+  State<_TrendyCaptionsSheet> createState() => _TrendyCaptionsSheetState();
+}
+
+class _TrendyCaptionsSheetState extends State<_TrendyCaptionsSheet> {
+  late String _caption;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _caption = widget.initialCaption;
+  }
+
+  Future<void> _regenerate() async {
+    setState(() => _isLoading = true);
+    try {
+      final newCaption = await widget.fetchCaption();
+      if (mounted) {
+        setState(() {
+          if (newCaption != null) _caption = newCaption;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        UIUtils.showSnackBar(context, 'Regeneration failed: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Trendy Caption',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade400),
+                  ),
+                  child: const Icon(Icons.close, size: 18, color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Trending captions with 5 hashtags, matched to your reel.',
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Trendy caption',
+            style: TextStyle(fontSize: 17, color: Colors.black),
+          ),
+          const SizedBox(height: 10),
+          // Caption box with action icons
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _isLoading
+                    ? const SizedBox(
+                        height: 60,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.black,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      )
+                    : Text(
+                        _caption,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: Colors.black87,
+                        ),
+                      ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _ActionIcon(
+                      icon: Icons.refresh_rounded,
+                      enabled: !_isLoading,
+                      onTap: _regenerate,
+                    ),
+                    const SizedBox(width: 8),
+                    _ActionIcon(
+                      icon: Icons.copy_outlined,
+                      enabled: !_isLoading,
+                      onTap: () {
+                        widget.onUse(_caption);
+                        UIUtils.showSnackBar(context, 'Caption applied ✓');
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionIcon extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _ActionIcon({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? Colors.black : Colors.grey.shade400,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Trendy Hashtags sheet ──────────────────────────────────────────────────
+class _TrendyHashtagsSheet extends StatefulWidget {
+  final List<String> trendyPicks;
+
+  const _TrendyHashtagsSheet({required this.trendyPicks});
+
+  @override
+  State<_TrendyHashtagsSheet> createState() => _TrendyHashtagsSheetState();
+}
+
+class _TrendyHashtagsSheetState extends State<_TrendyHashtagsSheet> {
+  late Set<String> _selected;
+  final List<String> _userAdded = [];
+  final TextEditingController _inputController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set.from(widget.trendyPicks);
+  }
+
+  @override
+  void dispose() {
+    _inputController.dispose();
+    super.dispose();
+  }
+
+  void _addHashtag() {
+    final raw = _inputController.text.trim();
+    if (raw.isEmpty) return;
+    final tag = raw.startsWith('#') ? raw : '#$raw';
+    setState(() => _userAdded.add(tag));
+    _inputController.clear();
+  }
+
+  List<String> get _finalSet => [..._userAdded, ..._selected];
+
+  void _copyFinalSet(BuildContext ctx) {
+    final text = _finalSet.join(' ');
+    Clipboard.setData(ClipboardData(text: text));
+    UIUtils.showSnackBar(ctx, 'Hashtags copied ✓');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final finalSet = _finalSet;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (sheetContext, sc) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Hashtags',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Add your own + pick from trending. Combined set is ready to copy.',
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView(
+              controller: sc,
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              children: [
+                // "Add your own" section
+                const Text(
+                  'Add your own',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _inputController,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: '#travelreel, sunset, maldives…',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade400,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Colors.black),
+                          ),
+                        ),
+                        onSubmitted: (_) => _addHashtag(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: _addHashtag,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          '+ Add',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // "Trendy picks" section
+                Row(
+                  children: [
+                    const Text(
+                      'Trendy picks',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'tap to toggle',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: widget.trendyPicks.map((tag) {
+                    final isSelected = _selected.contains(tag);
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selected.remove(tag);
+                          } else {
+                            _selected.add(tag);
+                          }
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.black : Colors.white,
+                          border: Border.all(color: Colors.black, width: 1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected ? Colors.white : Colors.black,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+
+                // Final set box
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Final set - ${finalSet.length}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        finalSet.join(' '),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.5,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _ActionIcon(
+                            icon: Icons.copy_outlined,
+                            enabled: finalSet.isNotEmpty,
+                            onTap: () => _copyFinalSet(context),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
 
 class _PlayPauseOverlay extends StatefulWidget {
   final VideoPlayerController controller;
@@ -1408,6 +4339,717 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
               : Border.all(color: Colors.grey.shade300),
         ),
       ),
+    );
+  }
+}
+
+// ── Export PDF Sheet ───────────────────────────────────────────────────────
+class _ExportPdfSheet extends StatelessWidget {
+  final String thumbnailPath;
+  final String thumbnailUrl;
+  final Future<void> Function() onDownload;
+
+  const _ExportPdfSheet({
+    required this.thumbnailPath,
+    required this.thumbnailUrl,
+    required this.onDownload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        20 + MediaQuery.of(context).padding.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Reel Report',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade400),
+                  ),
+                  child: const Icon(Icons.close, size: 18, color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          const Text(
+            'Export as PDF',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Bundles caption, transcription, hook, trendy captions & hashtags into a shareable PDF.',
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 16),
+
+          // Preview card
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F0E8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE0D8C8)),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    height: 90,
+                    width: double.infinity,
+                    child: _buildThumbnail(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Reel Report',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'cover thumbnail',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '5 pages · cover · transcription · hook · caption + hashtags · credits',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Download button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await onDownload();
+              },
+              icon: const Icon(
+                Icons.picture_as_pdf_outlined,
+                color: Colors.white,
+                size: 18,
+              ),
+              label: const Text(
+                'Preview & download PDF',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: Text(
+              'Share anywhere — Instagram, WhatsApp, Drive, email.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Share buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ShareButton(
+                icon: Icons.chat_rounded,
+                label: 'WhatsApp',
+                color: const Color(0xFF25D366),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await onDownload();
+                },
+              ),
+              _ShareButton(
+                icon: Icons.camera_alt_outlined,
+                label: 'Instagram',
+                color: const Color(0xFFE1306C),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await onDownload();
+                },
+              ),
+              _ShareButton(
+                icon: Icons.drive_folder_upload_outlined,
+                label: 'Drive',
+                color: const Color(0xFF4285F4),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await onDownload();
+                },
+              ),
+              _ShareButton(
+                icon: Icons.mail_outline_rounded,
+                label: 'Mail',
+                color: const Color(0xFFEA4335),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await onDownload();
+                },
+              ),
+              _ShareButton(
+                icon: Icons.more_horiz_rounded,
+                label: 'More',
+                color: Colors.grey,
+                onTap: () async {
+                  Navigator.pop(context);
+                  await onDownload();
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThumbnail() {
+    if (thumbnailPath.isNotEmpty && File(thumbnailPath).existsSync()) {
+      return Image.file(File(thumbnailPath), fit: BoxFit.cover);
+    }
+    if (thumbnailUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: thumbnailUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(color: const Color(0xFFE0D8C8)),
+        errorWidget: (_, __, ___) => _placeholderThumbnail(),
+      );
+    }
+    return _placeholderThumbnail();
+  }
+
+  Widget _placeholderThumbnail() {
+    return Container(
+      color: const Color(0xFFE0D8C8),
+      child: const Center(
+        child: Icon(Icons.image_outlined, size: 36, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _ShareButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ShareButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withAlpha(25),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withAlpha(60)),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.black87),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReelReportPreviewScreen extends StatelessWidget {
+  final Uint8List pdfBytes;
+  final String filename;
+  final String title;
+  final String subtitle;
+
+  const _ReelReportPreviewScreen({
+    required this.pdfBytes,
+    required this.filename,
+    required this.title,
+    required this.subtitle,
+  });
+
+  Future<void> _sharePdf() {
+    return Printing.sharePdf(bytes: pdfBytes, filename: filename);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2EFE6),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black, width: 1),
+                      ),
+                      child: const Icon(Icons.close, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: Colors.black,
+                            height: 1.05,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _PdfHeaderButton(
+                    icon: Icons.download_rounded,
+                    onTap: _sharePdf,
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _sharePdf,
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Share',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: PdfPreview(
+                build: (_) async => pdfBytes,
+                pdfFileName: filename,
+                canChangeOrientation: false,
+                canChangePageFormat: false,
+                canDebug: false,
+                allowPrinting: false,
+                allowSharing: false,
+                loadingWidget: const Center(
+                  child: CircularProgressIndicator(color: Colors.black),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PdfHeaderButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _PdfHeaderButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black, width: 1),
+        ),
+        child: Icon(icon, size: 19, color: Colors.black),
+      ),
+    );
+  }
+}
+
+class _DownloadAssetsSheet extends StatefulWidget {
+  final List<String> allMediaPaths;
+  final String username;
+  final Function(List<String>) onDownload;
+
+  const _DownloadAssetsSheet({
+    required this.allMediaPaths,
+    required this.username,
+    required this.onDownload,
+  });
+
+  @override
+  State<_DownloadAssetsSheet> createState() => _DownloadAssetsSheetState();
+}
+
+class _DownloadAssetsSheetState extends State<_DownloadAssetsSheet> {
+  late Set<String> _selectedPaths;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPaths = widget.allMediaPaths.toSet();
+  }
+
+  void _toggle(String path) {
+    setState(() {
+      if (_selectedPaths.contains(path)) {
+        _selectedPaths.remove(path);
+      } else {
+        _selectedPaths.add(path);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.8,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Column(
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Title
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Download Images',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black, width: 1.2),
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.black,
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(height: 32),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  children: [
+                    // Subtitle
+                    const Text(
+                      'Download reel images',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Pulled from the reel link you pasted · ${widget.allMediaPaths.length} frames. Download them as one PDF or save each frame as an image — share anywhere.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 16),
+                    // Selected count + Clear all
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Selected · ${_selectedPaths.length} / ${widget.allMediaPaths.length}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              if (_selectedPaths.isEmpty) {
+                                _selectedPaths = widget.allMediaPaths.toSet();
+                              } else {
+                                _selectedPaths.clear();
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.black,
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Text(
+                              _selectedPaths.isEmpty
+                                  ? 'Select all'
+                                  : 'Clear all',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Grid
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: widget.allMediaPaths.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.9,
+                          ),
+                      itemBuilder: (context, index) {
+                        final path = widget.allMediaPaths[index];
+                        final isSelected = _selectedPaths.contains(path);
+                        return GestureDetector(
+                          onTap: () => _toggle(path),
+                          child: Stack(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.black,
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(11),
+                                  child: Image.file(
+                                    File(path),
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  ),
+                                ),
+                              ),
+                              // Index
+                              Positioned(
+                                top: 4,
+                                left: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Checkmark
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Colors.black
+                                        : Colors.white.withValues(alpha: 0.5),
+                                    shape: BoxShape.circle,
+                                    border: isSelected
+                                        ? null
+                                        : Border.all(color: Colors.black12),
+                                  ),
+                                  child: Icon(
+                                    Icons.check,
+                                    size: 14,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.transparent,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+              // Download button
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24, top: 12),
+                child: GestureDetector(
+                  onTap: _selectedPaths.isEmpty
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          widget.onDownload(_selectedPaths.toList());
+                        },
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: _selectedPaths.isEmpty
+                          ? Colors.grey
+                          : const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.download_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Download ${_selectedPaths.length} images / PDF',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

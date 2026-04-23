@@ -372,6 +372,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
                         initialCaption: widget.caption,
                         postUrl: widget.postUrl,
                         localImagePath: path,
+                        allMediaPaths: widget.mediaItems
+                            .asMap()
+                            .entries
+                            .map((e) => _getExpectedFilePath(e.value, e.key))
+                            .toList(),
                         showDeleteButton: false,
                         showHomeButton: true,
                         thumbnailUrl: thumbnail ?? path,
