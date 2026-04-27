@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -127,8 +128,48 @@ class MainActivity : FlutterActivity() {
             INSTA_CHANNEL
         ).setMethodCallHandler { call, result ->
 
-            // ✅ Changed name to match Flutter's call: 'repostToInstagram'
-            if (call.method == "repostToInstagram") {
+            if (call.method == "shareFileToApp") {
+                val path       = call.argument<String>("path")
+                val packageName = call.argument<String>("packageName")
+                val mimeType   = call.argument<String>("mimeType") ?: "application/pdf"
+                val subject    = call.argument<String>("subject")
+                val body       = call.argument<String>("body")
+
+                if (path == null || packageName == null) {
+                    result.error("INVALID_ARGUMENT", "path or packageName is null", null)
+                    return@setMethodCallHandler
+                }
+
+                val file = File(path)
+                if (!file.exists()) {
+                    result.error("FILE_NOT_FOUND", "File not found at $path", null)
+                    return@setMethodCallHandler
+                }
+
+                val uri = FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.fileprovider",
+                    file
+                )
+
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeType
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
+                    if (body   != null) putExtra(Intent.EXTRA_TEXT,    body)
+                    setPackage(packageName)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+
+                try {
+                    startActivity(intent)
+                    result.success(null)
+                } catch (e: Exception) {
+                    result.error("SHARE_ERROR", "Could not open $packageName: ${e.message}", null)
+                }
+
+            } else if (call.method == "repostToInstagram") {
                 val uriString = call.argument<String>("uri")
                 val mediaType = call.argument<String>("mediaType") ?: "video"
                 

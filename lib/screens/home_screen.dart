@@ -45,11 +45,13 @@ enum _CreatorStudioAction {
 
 class _CreatorStudioOption {
   final String title;
+  final String subtitle;
   final IconData icon;
   final _CreatorStudioAction action;
 
   const _CreatorStudioOption({
     required this.title,
+    required this.subtitle,
     required this.icon,
     required this.action,
   });
@@ -75,27 +77,32 @@ class _HomeScreenState extends State<HomeScreen>
   late TabController _tabController;
   static const List<_CreatorStudioOption> _creatorStudioOptions = [
     _CreatorStudioOption(
-      title: "Transcribe and Translate",
+      title: "Transcribe & Translate",
+      subtitle: "Convert reel audio into text & translated captions",
       icon: Icons.translate_rounded,
       action: _CreatorStudioAction.transcribeTranslate,
     ),
     _CreatorStudioOption(
-      title: "Hook Timing",
-      icon: Icons.music_note_rounded,
+      title: "Hook Generator",
+      subtitle: "Create scroll-stopping openers for your reels",
+      icon: Icons.whatshot_rounded,
       action: _CreatorStudioAction.hookTiming,
     ),
     _CreatorStudioOption(
       title: "Trendy Captions",
-      icon: Icons.trending_up_rounded,
+      subtitle: "Write engaging captions using current trends",
+      icon: Icons.edit_note_rounded,
       action: _CreatorStudioAction.trendyCaptions,
     ),
     _CreatorStudioOption(
       title: "Trendy Hashtags",
+      subtitle: "Find trending hashtags to maximize your reach",
       icon: Icons.tag_rounded,
       action: _CreatorStudioAction.trendyHashtags,
     ),
     _CreatorStudioOption(
-      title: "Download Post Images/PDF",
+      title: "Save & Export Content",
+      subtitle: "Download reels, carousels and stories locally",
       icon: Icons.download_rounded,
       action: _CreatorStudioAction.downloadAssets,
     ),
@@ -1145,8 +1152,31 @@ class _HomeScreenState extends State<HomeScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (_) => _CreatorStudioStaggeredSheet(
+        options: _creatorStudioOptions,
+        onOptionTap: (option) {
+          Navigator.pop(context);
+          if (option.action == _CreatorStudioAction.trendyCaptions ||
+              option.action == _CreatorStudioAction.trendyHashtags) {
+            _showCreatorStudioOptionsSubSheet(option);
+          } else {
+            _openCreatorStudioLinkDialog(option);
+          }
+        },
+        accentColor: _creatorStudioAccentColor,
+      ),
+    ).whenComplete(() => _creatorStudioController.reverse());
+  }
+
+  void _showCreatorStudioOptionsSubSheet(_CreatorStudioOption option) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1161,182 +1191,191 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              "Creator Studio",
-              style: TextStyle(
-                fontSize: 22,
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
-              ),
+            const SizedBox(height: 24),
+            Text(
+              option.title,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             const Text(
-              "AI-powered tools for your reels",
-              style: TextStyle(fontSize: 13, color: Colors.black45),
+              "Choose how you want to provide data",
+              style: TextStyle(fontSize: 14, color: Colors.black54),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 140,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: _creatorStudioOptions.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (ctx, index) {
-                  final option = _creatorStudioOptions[index];
-                  final color = _creatorStudioAccentColor(option.action);
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _openCreatorStudioLinkDialog(option);
-                    },
-                    child: Container(
-                      width: 118,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.07),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 16, 8, 10),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(option.icon, size: 22, color: color),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              option.title,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                                height: 1.25,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+            const SizedBox(height: 24),
+            _SubOptionTile(
+              title: "Paste Link",
+              subtitle: "Use an Instagram reel link",
+              icon: Icons.link_rounded,
+              onTap: () {
+                Navigator.pop(context);
+                _openCreatorStudioLinkDialog(option);
+              },
+            ),
+            const SizedBox(height: 12),
+            _SubOptionTile(
+              title: "Generate Captions",
+              subtitle: "Enter text directly to process",
+              icon: Icons.article_outlined,
+              onTap: () {
+                Navigator.pop(context);
+                _openCreatorStudioLinkDialog(option, isParagraph: true);
+              },
             ),
           ],
         ),
       ),
-    ).whenComplete(() => _creatorStudioController.reverse());
+    );
   }
 
   Widget _buildCreatorStudioButton() {
     return Positioned(
       right: 16,
       bottom: 112,
-      child: GestureDetector(
-        onTap: _showCreatorStudioSheet,
-        child: Container(
-          height: 58,
-          padding: const EdgeInsets.only(left: 14, right: 22),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1A1A1A), Color(0xFF3A3A3A)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            onTap: _showCreatorStudioSheet,
+            child: Container(
+              height: 58,
+              padding: const EdgeInsets.only(left: 14, right: 22),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A1A1A), Color(0xFF3A3A3A)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RotationTransition(
+                    turns: Tween<double>(begin: 0, end: 0.125).animate(
+                      CurvedAnimation(
+                        parent: _creatorStudioController,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    "Creator Studio",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RotationTransition(
-                turns: Tween<double>(begin: 0, end: 0.125).animate(
-                  CurvedAnimation(
-                    parent: _creatorStudioController,
-                    curve: Curves.easeOutCubic,
+          Positioned(
+            top: -6,
+            right: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                ),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              const Text(
-                "Creator Studio",
+              child: const Text(
+                "NEW",
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   // --- ACTIONS ---
-  Future<void> _openCreatorStudioLinkDialog(_CreatorStudioOption option) async {
+  Future<void> _openCreatorStudioLinkDialog(
+    _CreatorStudioOption option, {
+    bool isParagraph = false,
+  }) async {
     final String? result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return _CreatorStudioDialog(
           option: option,
           initialText: _linkController.text,
+          isParagraph: isParagraph,
         );
       },
     );
 
     if (result != null && mounted) {
-      _handleCreatorStudioLink(option, result);
+      _handleCreatorStudioLink(option, result, isParagraph: isParagraph);
     }
   }
 
-  void _handleCreatorStudioLink(_CreatorStudioOption option, String link) {
+  void _handleCreatorStudioLink(
+    _CreatorStudioOption option,
+    String link, {
+    bool isParagraph = false,
+  }) {
     FocusManager.instance.primaryFocus?.unfocus();
-    _linkController.text = link;
-
-    if (option.action == _CreatorStudioAction.downloadAssets) {
-      navigateToPreviewScreen(context, _linkController);
+    if (isParagraph &&
+        (option.action == _CreatorStudioAction.trendyCaptions ||
+            option.action == _CreatorStudioAction.trendyHashtags)) {
+      _showGroqGenerationSheet(option, link);
       return;
     }
+    _linkController.text = link;
+    navigateToPreviewScreen(context, _linkController);
+  }
 
-    UIUtils.showSnackBar(
-      context,
-      "${option.title} will process this reel soon",
+  Future<void> _showGroqGenerationSheet(
+    _CreatorStudioOption option,
+    String text,
+  ) async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => _GroqResultSheet(
+        option: option,
+        inputText: text,
+        apiBaseUrl: _apiBaseUrl,
+      ),
     );
   }
 
@@ -2009,8 +2048,13 @@ class _HomeScreenState extends State<HomeScreen>
 class _CreatorStudioDialog extends StatefulWidget {
   final _CreatorStudioOption option;
   final String initialText;
+  final bool isParagraph;
 
-  const _CreatorStudioDialog({required this.option, required this.initialText});
+  const _CreatorStudioDialog({
+    required this.option,
+    required this.initialText,
+    this.isParagraph = false,
+  });
 
   @override
   State<_CreatorStudioDialog> createState() => _CreatorStudioDialogState();
@@ -2031,44 +2075,113 @@ class _CreatorStudioDialogState extends State<_CreatorStudioDialog> {
     super.dispose();
   }
 
+  void _pasteLink() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final text = data?.text?.trim() ?? "";
+    if (text.contains("instagram.com/")) {
+      setState(() {
+        _dialogController.text = text;
+      });
+    } else {
+      UIUtils.showSnackBar(context, "⚠️ Please copy a valid Instagram link");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       title: Text(
         widget.option.title,
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
-      content: TextField(
-        controller: _dialogController,
-        autofocus: true,
-        decoration: InputDecoration(
-          hintText: "Paste Instagram reel link",
-          filled: true,
-          fillColor: Colors.grey.shade100,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          suffixIcon: IconButton(
-            icon: const Icon(Icons.content_paste_rounded),
-            onPressed: () async {
-              final data = await Clipboard.getData(Clipboard.kTextPlain);
-              if (!context.mounted) return;
-              final text = data?.text?.trim() ?? "";
-              if (text.contains("instagram.com/")) {
-                setState(() {
-                  _dialogController.text = text;
-                });
-              } else {
-                UIUtils.showSnackBar(
-                  context,
-                  "⚠️ Please copy a valid Instagram link",
-                );
-              }
-            },
-          ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _dialogController,
+              autofocus: true,
+              maxLines: widget.isParagraph ? 3 : 1,
+              minLines: 1,
+              keyboardType: widget.isParagraph
+                  ? TextInputType.multiline
+                  : TextInputType.text,
+              decoration: InputDecoration(
+                hintText: widget.isParagraph
+                    ? "Enter your text here"
+                    : "Paste a link here",
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                suffixIcon: widget.isParagraph
+                    ? null
+                    : GestureDetector(
+                        onTap: _pasteLink,
+                        child: Container(
+                          margin: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C6C6C),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/images/pastelink.png',
+                                width: 16,
+                                height: 16,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                "Paste link",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            if (widget.option.action ==
+                _CreatorStudioAction.downloadAssets) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: Colors.red.shade800,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Only image posts can be downloaded as PDF.",
+                      style: TextStyle(
+                        color: Colors.red.shade900,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
       actions: [
@@ -2086,11 +2199,15 @@ class _CreatorStudioDialogState extends State<_CreatorStudioDialog> {
           ),
           onPressed: () {
             final link = _dialogController.text.trim();
-            if (!link.contains("instagram.com/")) {
+            if (!widget.isParagraph && !link.contains("instagram.com/")) {
               UIUtils.showSnackBar(
                 context,
                 "⚠️ Please enter a valid Instagram link",
               );
+              return;
+            }
+            if (widget.isParagraph && link.isEmpty) {
+              UIUtils.showSnackBar(context, "⚠️ Please enter some text");
               return;
             }
             Navigator.of(context).pop(link);
@@ -2098,6 +2215,603 @@ class _CreatorStudioDialogState extends State<_CreatorStudioDialog> {
           child: const Text("Continue"),
         ),
       ],
+    );
+  }
+}
+
+class _SubOptionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _SubOptionTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.black87, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreatorStudioStaggeredSheet extends StatefulWidget {
+  final List<_CreatorStudioOption> options;
+  final Function(_CreatorStudioOption) onOptionTap;
+  final Color Function(_CreatorStudioAction) accentColor;
+
+  const _CreatorStudioStaggeredSheet({
+    required this.options,
+    required this.onOptionTap,
+    required this.accentColor,
+  });
+
+  @override
+  State<_CreatorStudioStaggeredSheet> createState() =>
+      _CreatorStudioStaggeredSheetState();
+}
+
+class _CreatorStudioStaggeredSheetState
+    extends State<_CreatorStudioStaggeredSheet>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Text(
+                  "Creator Studio",
+                  style: TextStyle(
+                    fontSize: 22,
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    "NEW",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "AI-powered tools for your reels",
+              style: TextStyle(fontSize: 13, color: Colors.black45),
+            ),
+            const SizedBox(height: 24),
+            ...List.generate(widget.options.length, (index) {
+              final option = widget.options[index];
+              final color = widget.accentColor(option.action);
+
+              final animation = CurvedAnimation(
+                parent: _controller,
+                curve: Interval(
+                  (index / widget.options.length) * 0.5,
+                  ((index + 1) / widget.options.length) * 0.5 + 0.5,
+                  curve: Curves.easeOutBack,
+                ),
+              );
+
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, child) {
+                  return Opacity(
+                    opacity: animation.value.clamp(0.0, 1.0),
+                    child: Transform.translate(
+                      offset: Offset(
+                        0,
+                        (1 - animation.value.clamp(0.0, 1.0)) * 20,
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _StudioOptionRowTile(
+                    option: option,
+                    color: color,
+                    onTap: () => widget.onOptionTap(option),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StudioOptionRowTile extends StatelessWidget {
+  final _CreatorStudioOption option;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _StudioOptionRowTile({
+    required this.option,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(color: Colors.black.withValues(alpha: 0.03)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(option.icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    option.title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    option.subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Colors.grey.shade300,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroqResultSheet extends StatefulWidget {
+  final _CreatorStudioOption option;
+  final String inputText;
+  final String apiBaseUrl;
+
+  const _GroqResultSheet({
+    required this.option,
+    required this.inputText,
+    required this.apiBaseUrl,
+  });
+
+  @override
+  State<_GroqResultSheet> createState() => _GroqResultSheetState();
+}
+
+class _GroqResultSheetState extends State<_GroqResultSheet> {
+  bool _isLoading = true;
+  dynamic _generatedResult; // Can be String or List<String>
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateContent();
+  }
+
+  Future<void> _generateContent() async {
+    try {
+      final endpoint =
+          widget.option.action == _CreatorStudioAction.trendyCaptions
+          ? "groq_caption"
+          : "groq_hashtags";
+
+      final response = await http.post(
+        Uri.parse("${widget.apiBaseUrl}$endpoint"),
+        body: {'text': widget.inputText},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['code'] == 200) {
+          setState(() {
+            _generatedResult =
+                widget.option.action == _CreatorStudioAction.trendyCaptions
+                ? List<String>.from(data['data']['captions'])
+                : List<String>.from(data['data']['hashtags']);
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _error = "Error: ${data['code']}";
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _error = "Server error: ${response.statusCode}";
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = "Failed to generate: $e";
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isListData = _generatedResult is List;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Your Paragraph",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.05),
+                      ),
+                    ),
+                    child: Text(
+                      widget.inputText,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    widget.option.action == _CreatorStudioAction.trendyCaptions
+                        ? "Generated Captions"
+                        : "Generated Hashtags",
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_isLoading)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Column(
+                          children: [
+                            const CircularProgressIndicator(
+                              color: Colors.black,
+                              strokeWidth: 3,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "AI is crafting your ${widget.option.action == _CreatorStudioAction.trendyCaptions ? 'variants' : 'hashtags'}...",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_error != null)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red.shade700),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(color: Colors.red.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (isListData)
+                    ...(_generatedResult as List).asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final variant = entry.value.toString();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  20,
+                                  48,
+                                  16,
+                                ),
+                                child: SelectableText(
+                                  variant,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    height: 1.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: IconButton(
+                                  onPressed: () {
+                                    Clipboard.setData(
+                                      ClipboardData(text: variant),
+                                    );
+                                    UIUtils.showSnackBar(
+                                      context,
+                                      "Copied successfully!",
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.copy_rounded,
+                                    size: 18,
+                                    color: Colors.black45,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    })
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.blue.withValues(alpha: 0.05),
+                            Colors.blue.withValues(alpha: 0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.blue.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: SelectableText(
+                        _generatedResult?.toString() ?? "",
+                        style: const TextStyle(
+                          fontSize: 15,
+                          height: 1.6,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  // if (!_isLoading && _generatedResult != null)
+                  //   SizedBox(
+                  //     width: double.infinity,
+                  //     height: 54,
+                  //     child: ElevatedButton.icon(
+                  //       onPressed: () {
+                  //         final textToCopy = _generatedResult is List
+                  //             ? (_generatedResult as List).join("\n\n")
+                  //             : _generatedResult.toString();
+                  //         Clipboard.setData(ClipboardData(text: textToCopy));
+                  //         UIUtils.showSnackBar(context, "All content copied!");
+                  //       },
+                  //       icon: const Icon(Icons.copy_all_rounded),
+                  //       label: const Text(
+                  //         "Copy All Hashtags",
+                  //         style: TextStyle(
+                  //           fontSize: 16,
+                  //           fontWeight: FontWeight.w700,
+                  //         ),
+                  //       ),
+                  //       style: ElevatedButton.styleFrom(
+                  //         backgroundColor: Colors.black,
+                  //         foregroundColor: Colors.white,
+                  //         shape: RoundedRectangleBorder(
+                  //           borderRadius: BorderRadius.circular(16),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //   ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

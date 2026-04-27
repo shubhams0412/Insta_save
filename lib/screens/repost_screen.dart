@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
-import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -19,10 +19,14 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'package:share_plus/share_plus.dart';
+import 'package:social_sharing_plus/social_sharing_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:insta_save/services/ad_service.dart'; // Import this
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:insta_save/utils/constants.dart';
 import 'package:insta_save/utils/ui_utils.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 enum _ReelOptionAction {
   originalCaption,
@@ -143,18 +147,18 @@ class _RepostScreenState extends State<RepostScreen>
       isPro: false,
     ),
     _ReelCreationOption(
-      title: 'Transcribe\nTranslate',
+      title: 'Transcribe/\nTranslate',
       icon: Icons.translate_rounded,
       action: _ReelOptionAction.transcribeTranslate,
     ),
     _ReelCreationOption(
       title: 'Hook\nTiming',
-      icon: Icons.music_note_rounded,
+      icon: Icons.whatshot_rounded,
       action: _ReelOptionAction.hookTiming,
     ),
     _ReelCreationOption(
       title: 'Trendy\nCaptions',
-      icon: Icons.trending_up_rounded,
+      icon: Icons.edit_note_rounded,
       action: _ReelOptionAction.trendyCaptions,
     ),
     _ReelCreationOption(
@@ -697,6 +701,11 @@ class _RepostScreenState extends State<RepostScreen>
     }
   }
 
+  Future<bool> _hasInternet() async {
+    final result = await Connectivity().checkConnectivity();
+    return !result.contains(ConnectivityResult.none);
+  }
+
   // ── API helper (file upload) ────────────────────────────────
   Future<Map<String, dynamic>> _postFileApi(
     String path,
@@ -733,11 +742,8 @@ class _RepostScreenState extends State<RepostScreen>
       if (mounted) {
         showModalBottomSheet(
           context: context,
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           isScrollControlled: true,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
           builder: (_) => _TranscriptSheet(
             transcript: data['transcript'],
             translated: data['translated'],
@@ -749,73 +755,62 @@ class _RepostScreenState extends State<RepostScreen>
     }
     // ─────────────────
 
+    if (!await _hasInternet()) {
+      if (mounted) {
+        UIUtils.showSnackBar(
+          context,
+          'No internet connection. Please try again when online.',
+        );
+      }
+      return;
+    }
+
+    _showLoadingOverlay('Uploading & Transcribing reel…\nPlease wait a moment');
+
+    String transcript = '';
+    String translated = '';
+    String detectedLang = 'en';
+    String? errorMsg;
+
+    try {
+      final res = await _postFileApi('transcribe', videoPath);
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      transcript = (data['transcript'] as String? ?? '').trim();
+      final translatedVal = (data['translated'] as String? ?? '').trim();
+      detectedLang = data['detected_language'] as String? ?? 'en';
+      translated = translatedVal.isNotEmpty ? translatedVal : transcript;
+      if (transcript.isEmpty) {
+        errorMsg = 'Could not transcribe this reel. Please try again shortly.';
+      }
+      if (transcript.isNotEmpty) {
+        await _saveToCache('transcribe', {
+          'transcript': transcript,
+          'translated': translated,
+          'detected_language': detectedLang,
+        });
+      }
+    } catch (e) {
+      errorMsg = 'Transcription failed: $e';
+    } finally {
+      if (mounted) _hideLoadingOverlay();
+    }
+
+    if (!mounted) return;
+    if (errorMsg != null) {
+      UIUtils.showSnackBar(context, errorMsg);
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => const _LoadingSheet(
-        message: 'Uploading & transcribing reel…\nThis may take ~30 seconds',
+      builder: (_) => _TranscriptSheet(
+        transcript: transcript,
+        translated: translated,
+        detectedLanguage: detectedLang,
       ),
     );
-
-    try {
-      // ── Step 1: Backend Whisper transcription ──
-      final res = await _postFileApi(
-        'transcribe',
-        videoPath,
-        extraFields: {'target_language': 'en'},
-      );
-      if (!mounted) return;
-
-      final data = res['data'] as Map<String, dynamic>? ?? {};
-      final transcript = (data['transcript'] as String? ?? '').trim();
-      final translatedVal = (data['translated'] as String? ?? '').trim();
-      final detectedLang = data['detected_language'] as String? ?? 'en';
-
-      if (transcript.isEmpty) {
-        Navigator.of(context).pop();
-        UIUtils.showSnackBar(context, 'No speech detected in this reel');
-        return;
-      }
-
-      // Use backend translation if available, otherwise fallback to local transcript
-      String translated = translatedVal.isNotEmpty ? translatedVal : transcript;
-
-      // ── Save to Cache ──
-      await _saveToCache('transcribe', {
-        'transcript': transcript,
-        'translated': translated,
-        'detected_language': detectedLang,
-      });
-      // ──────────────────
-
-      if (!mounted) return;
-      Navigator.of(context).pop(); // close loading sheet
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.white,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => _TranscriptSheet(
-          transcript: transcript,
-          translated: translated,
-          detectedLanguage: detectedLang,
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        UIUtils.showSnackBar(context, 'Transcription failed: $e');
-      }
-    }
   }
 
   // ── 3. Hook sheet ───────────────────────────────────────────
@@ -853,63 +848,60 @@ class _RepostScreenState extends State<RepostScreen>
     }
     // ─────────────────
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => const _LoadingSheet(
-        message: 'Uploading & analyzing hook…\nThis may take ~30 seconds',
-      ),
-    );
+    if (!await _hasInternet()) {
+      if (mounted) {
+        UIUtils.showSnackBar(
+          context,
+          'No internet connection. Please try again when online.',
+        );
+      }
+      return;
+    }
+
+    _showLoadingOverlay('Uploading & Analyzing Hook…\nPlease wait a moment');
+
+    String hookText = '';
+    double startTime = 0;
+    double endTime = 0;
+    String? errorMsg;
 
     try {
       final res = await _postFileApi('extract_hook', videoPath);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
       final data = res['data'] as Map<String, dynamic>? ?? {};
-      final hookText = (data['hook_text'] as String? ?? '').trim();
-      final startTime = (data['start_time'] as num? ?? 0).toDouble();
-      final endTime = (data['end_time'] as num? ?? 0).toDouble();
-
-      // ── Save to Cache ──
+      hookText = (data['hook_text'] as String? ?? '').trim();
+      startTime = (data['start_time'] as num? ?? 0).toDouble();
+      endTime = (data['end_time'] as num? ?? 0).toDouble();
+      if (hookText.isEmpty) errorMsg = 'Could not identify a hook in this reel';
       await _saveToCache('hook', {
         'hook_text': hookText,
         'start_time': startTime,
         'end_time': endTime,
       });
-      // ──────────────────
-
-      if (!mounted) return;
-      if (hookText.isEmpty) {
-        UIUtils.showSnackBar(context, 'Could not identify a hook in this reel');
-        return;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.white,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => _HookSheet(
-          hookText: hookText,
-          startTime: startTime,
-          endTime: endTime,
-        ),
-      );
     } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        UIUtils.showSnackBar(context, 'Hook extraction failed: $e');
-      }
+      errorMsg = 'Hook extraction failed: $e';
+    } finally {
+      if (mounted) _hideLoadingOverlay();
     }
+
+    if (!mounted) return;
+    if (errorMsg != null) {
+      UIUtils.showSnackBar(context, errorMsg);
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _HookSheet(
+        hookText: hookText,
+        startTime: startTime,
+        endTime: endTime,
+      ),
+    );
   }
 
   // ── 4. Trendy Captions sheet ────────────────────────────────
@@ -960,18 +952,17 @@ class _RepostScreenState extends State<RepostScreen>
     }
     // ─────────────────
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) =>
-          const _LoadingSheet(message: 'Generating trendy caption…'),
-    );
+    if (!await _hasInternet()) {
+      if (mounted) {
+        UIUtils.showSnackBar(
+          context,
+          'No internet connection. Please try again when online.',
+        );
+      }
+      return;
+    }
+
+    _showLoadingOverlay('Generating Trendy Caption…\nPlease wait a moment');
 
     final mediaPath = widget.localImagePath.isNotEmpty
         ? widget.localImagePath
@@ -988,57 +979,63 @@ class _RepostScreenState extends State<RepostScreen>
           .map((e) => e.toString())
           .toList();
       final result = captions.isNotEmpty ? captions.first : null;
-      if (result != null) {
-        await _saveToCache('caption', {'caption': result});
-      }
+      if (result != null) await _saveToCache('caption', {'caption': result});
       return result;
     }
 
+    String? caption;
+    String? errorMsg;
     try {
-      final caption = await fetchCaption();
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
-      if (caption == null) {
-        UIUtils.showSnackBar(context, 'Could not generate caption');
-        return;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.white,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => _TrendyCaptionsSheet(
-          initialCaption: caption,
-          fetchCaption: fetchCaption,
-          onUse: (c) {
-            _captionController.text = c;
-            Clipboard.setData(ClipboardData(text: c));
-            Navigator.of(context).pop();
-            UIUtils.showSnackBar(context, 'Caption applied ✓');
-          },
-        ),
-      );
+      caption = await fetchCaption();
+      if (caption == null) errorMsg = 'Could not generate caption';
     } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        UIUtils.showSnackBar(context, 'Caption generation failed: $e');
-      }
+      errorMsg = 'Caption generation failed: $e';
+    } finally {
+      if (mounted) _hideLoadingOverlay();
     }
+
+    if (!mounted) return;
+    if (errorMsg != null) {
+      UIUtils.showSnackBar(context, errorMsg);
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _TrendyCaptionsSheet(
+        initialCaption: caption!,
+        fetchCaption: fetchCaption,
+        onUse: (c) {
+          _captionController.text = c;
+          Clipboard.setData(ClipboardData(text: c));
+          Navigator.of(context).pop();
+          UIUtils.showSnackBar(context, 'Caption applied ✓');
+        },
+      ),
+    );
   }
 
   // ── 5. Trendy Hashtags sheet ────────────────────────────────
   Future<void> _showTrendyHashtagsSheet(String caption) async {
+    if (_isAiBusy) return;
+    setState(() => _isAiBusy = true);
+
     // ── Check Cache ──
     final cachedJson = await _getFromCache('hashtags');
-    if (!mounted) return;
+    if (!mounted) {
+      _isAiBusy = false;
+      return;
+    }
     if (cachedJson != null) {
       final data = jsonDecode(cachedJson);
       final picks = (data['picks'] as List? ?? []).cast<String>();
-      if (picks.isNotEmpty && mounted) {
+      if (picks.isNotEmpty) {
+        _isAiBusy = false;
         showModalBottomSheet(
           context: context,
           backgroundColor: Colors.white,
@@ -1048,39 +1045,39 @@ class _RepostScreenState extends State<RepostScreen>
           ),
           builder: (_) => _TrendyHashtagsSheet(trendyPicks: picks),
         );
+        return;
       }
-      return;
+      // If empty, continue to fetch fresh ones instead of silent return
     }
     // ─────────────────
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) =>
-          const _LoadingSheet(message: 'Generating trending hashtags…'),
-    );
+    if (!await _hasInternet()) {
+      setState(() => _isAiBusy = false);
+      if (mounted) {
+        UIUtils.showSnackBar(
+          context,
+          'No internet connection. Please try again when online.',
+        );
+      }
+      return;
+    }
 
+    _showLoadingOverlay('Generating Trending Hashtags…\nPlease wait a moment');
+
+    final mediaPath = widget.localImagePath.isNotEmpty
+        ? widget.localImagePath
+        : widget.imageUrl;
+
+    List<String> picks = [];
+    String? errorMsg;
     try {
-      final mediaPath = widget.localImagePath.isNotEmpty
-          ? widget.localImagePath
-          : widget.imageUrl;
-
       final res = await _postFileApi(
         'trendy_hashtags',
         mediaPath,
         extraFields: {'caption': caption},
       );
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
       final data = res['data'] as Map<String, dynamic>? ?? {};
-      final picks = [
+      picks = [
         ...(data['high_reach'] as List<dynamic>? ?? []).map(
           (e) => e.toString(),
         ),
@@ -1089,32 +1086,30 @@ class _RepostScreenState extends State<RepostScreen>
           (e) => e.toString(),
         ),
       ];
-
-      // ── Save to Cache ──
       await _saveToCache('hashtags', {'picks': picks});
-      // ──────────────────
-
-      if (!mounted) return;
-      if (picks.isEmpty) {
-        UIUtils.showSnackBar(context, 'Could not generate hashtags');
-        return;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.white,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => _TrendyHashtagsSheet(trendyPicks: picks),
-      );
+      if (picks.isEmpty) errorMsg = 'Could not generate hashtags';
     } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        UIUtils.showSnackBar(context, 'Hashtag generation failed: $e');
-      }
+      errorMsg = 'Hashtag generation failed: $e';
+    } finally {
+      setState(() => _isAiBusy = false);
+      if (mounted) _hideLoadingOverlay();
     }
+
+    if (!mounted) return;
+    if (errorMsg != null) {
+      UIUtils.showSnackBar(context, errorMsg);
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _TrendyHashtagsSheet(trendyPicks: picks),
+    );
   }
 
   // ── 6. Export as PDF ────────────────────────────────────────
@@ -1132,9 +1127,23 @@ class _RepostScreenState extends State<RepostScreen>
   }
 
   void _showDownloadAssetsSheet() {
-    final paths = widget.allMediaPaths.isNotEmpty
-        ? widget.allMediaPaths
-        : [widget.localImagePath];
+    final paths =
+        (widget.allMediaPaths.isNotEmpty
+                ? widget.allMediaPaths
+                : [widget.localImagePath])
+            .where((path) {
+              final p = path.toLowerCase();
+              return !p.endsWith('.mp4') && !p.endsWith('.mov');
+            })
+            .toList();
+
+    if (paths.isEmpty) {
+      UIUtils.showSnackBar(
+        context,
+        'No downloadable images available for this post.',
+      );
+      return;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -1244,7 +1253,7 @@ class _RepostScreenState extends State<RepostScreen>
     }
   }
 
-  Future<void> _exportAsPdf() async {
+  Future<void> _exportAsPdf([String? shareTarget]) async {
     try {
       UIUtils.showSnackBar(context, 'Preparing PDF…');
       final report = await _loadReelReportData();
@@ -1255,6 +1264,99 @@ class _RepostScreenState extends State<RepostScreen>
       final filename =
           '${username.isEmpty ? 'reel' : username}_report_$dateStr.pdf';
 
+      if (shareTarget == 'download') {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$filename');
+        await file.writeAsBytes(pdfBytes);
+        if (!mounted) return;
+        final String? uri = await _mediaStoreChannel.invokeMethod<String>(
+          'saveMedia',
+          {'path': file.path, 'mediaType': 'pdf'},
+        );
+        if (mounted) {
+          UIUtils.showSnackBar(
+            context,
+            uri != null ? 'PDF saved to Downloads ✓' : 'Failed to save PDF',
+          );
+        }
+        return;
+      }
+
+      if (shareTarget == 'share') {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$filename');
+        await file.writeAsBytes(pdfBytes);
+        if (!mounted) return;
+        await Share.shareXFiles([XFile(file.path)], subject: filename);
+        return;
+      }
+
+      if (shareTarget != null) {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$filename');
+        await file.writeAsBytes(pdfBytes);
+
+        if (!mounted) return;
+
+        switch (shareTarget) {
+          case 'whatsapp':
+            await SocialSharingPlus.shareToSocialMedia(
+              SocialPlatform.whatsapp,
+              '',
+              media: file.path,
+            );
+          case 'instagram':
+            try {
+              await _instaChannel.invokeMethod('shareFileToApp', {
+                'path': file.path,
+                'packageName': 'com.instagram.android',
+                'mimeType': 'application/pdf',
+              });
+            } catch (_) {
+              await Share.shareXFiles([XFile(file.path)]);
+            }
+          case 'drive':
+            try {
+              await _instaChannel.invokeMethod('shareFileToApp', {
+                'path': file.path,
+                'packageName': 'com.google.android.apps.docs',
+                'mimeType': 'application/pdf',
+                'subject': filename,
+              });
+            } catch (_) {
+              await Share.shareXFiles([XFile(file.path)], subject: filename);
+            }
+          case 'mail':
+            try {
+              await _instaChannel.invokeMethod('shareFileToApp', {
+                'path': file.path,
+                'packageName': 'com.google.android.gm',
+                'mimeType': 'application/pdf',
+                'subject': 'Reel Report - ${widget.username}',
+                'body': 'Please find the attached reel report.',
+              });
+            } catch (_) {
+              await Share.shareXFiles(
+                [XFile(file.path)],
+                subject: 'Reel Report - ${widget.username}',
+                text: 'Please find the attached reel report.',
+              );
+            }
+          default:
+            await Share.shareXFiles([XFile(file.path)]);
+        }
+        return;
+      }
+
+      // Calculate total pages for display
+      final int totalPages =
+          1 +
+          (report.hookText.isNotEmpty ? 1 : 0) +
+          (report.transcript.isNotEmpty ? 1 : 0) +
+          (report.trendyCaption.isNotEmpty ? 1 : 0) +
+          (report.keywords.isNotEmpty ? 1 : 0) +
+          (report.hashtags.isNotEmpty ? 1 : 0);
+
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -1262,7 +1364,8 @@ class _RepostScreenState extends State<RepostScreen>
             pdfBytes: pdfBytes,
             filename: filename,
             title: report.title,
-            subtitle: '6 pages · creator deliverable',
+            subtitle:
+                '$totalPages ${totalPages == 1 ? 'page' : 'pages'} · creator deliverable',
           ),
         ),
       );
@@ -1314,9 +1417,7 @@ class _RepostScreenState extends State<RepostScreen>
         .map((item) => item.toString().trim())
         .where((tag) => tag.isNotEmpty)
         .toList();
-    final hashtags = cachedHashtags.isNotEmpty
-        ? cachedHashtags
-        : _extractHashtags('$originalCaption $currentCaption $trendyCaption');
+    final hashtags = cachedHashtags;
 
     final reportText = [
       originalCaption,
@@ -1362,19 +1463,6 @@ class _RepostScreenState extends State<RepostScreen>
 
     final cleanUser = widget.username.replaceAll('@', '').trim();
     return cleanUser.isEmpty ? 'Reel Report' : 'Reel Report - @$cleanUser';
-  }
-
-  List<String> _extractHashtags(String text) {
-    final matches = RegExp(r'#[A-Za-z0-9_]+').allMatches(text);
-    final seen = <String>{};
-    final tags = <String>[];
-    for (final match in matches) {
-      final tag = match.group(0);
-      if (tag == null) continue;
-      final normalized = tag.toLowerCase();
-      if (seen.add(normalized)) tags.add(tag);
-    }
-    return tags;
   }
 
   List<String> _extractKeywords(String text) {
@@ -1436,6 +1524,14 @@ class _RepostScreenState extends State<RepostScreen>
     ];
 
     for (final candidate in candidates) {
+      final ext = candidate.toLowerCase();
+      if (ext.endsWith('.mp4') ||
+          ext.endsWith('.mov') ||
+          ext.contains('.mp4?') ||
+          ext.contains('.mov?')) {
+        continue;
+      }
+
       try {
         if (candidate.startsWith('http')) {
           final response = await http
@@ -1448,9 +1544,7 @@ class _RepostScreenState extends State<RepostScreen>
         }
 
         final file = File(candidate);
-        if (file.existsSync() &&
-            !candidate.toLowerCase().endsWith('.mp4') &&
-            !candidate.toLowerCase().endsWith('.mov')) {
+        if (file.existsSync()) {
           return await file.readAsBytes();
         }
       } catch (_) {
@@ -1528,6 +1622,25 @@ class _RepostScreenState extends State<RepostScreen>
 
   Future<Uint8List> _buildReelReportPdf(_ReelReportData report) async {
     final doc = pw.Document();
+
+    // ── Determine which sections to include ──
+    final bool hasHook = report.hookText.isNotEmpty;
+    final bool hasTranscript = report.transcript.isNotEmpty;
+    final bool hasCaptions = report.trendyCaption.isNotEmpty;
+    final bool hasKeywords = report.keywords.isNotEmpty;
+    final bool hasHashtags = report.hashtags.isNotEmpty;
+
+    // Total pages = Intro (1) + Hook (0/1) + Transcript (0/1) + Captions (0/1) + Keywords (0/1) + Hashtags (0/1)
+    final int totalPagesCount =
+        1 +
+        (hasHook ? 1 : 0) +
+        (hasTranscript ? 1 : 0) +
+        (hasCaptions ? 1 : 0) +
+        (hasKeywords ? 1 : 0) +
+        (hasHashtags ? 1 : 0);
+
+    int currentPageIndex = 1;
+
     final boldFont = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Roboto-Bold.ttf'),
     );
@@ -1601,6 +1714,7 @@ class _RepostScreenState extends State<RepostScreen>
 
     pw.Widget pageShell({
       required int page,
+      required int totalPages,
       required pw.Widget child,
       bool dark = false,
     }) {
@@ -1639,7 +1753,7 @@ class _RepostScreenState extends State<RepostScreen>
                     style: const pw.TextStyle(fontSize: 8, color: muted),
                   ),
                   pw.Text(
-                    '$page / 6',
+                    '$page / $totalPages',
                     style: const pw.TextStyle(fontSize: 8, color: muted),
                   ),
                 ],
@@ -1819,6 +1933,7 @@ class _RepostScreenState extends State<RepostScreen>
       );
     }
 
+    // --- Page 1: Title & Overview ---
     doc.addPage(
       pw.Page(
         pageTheme: pw.PageTheme(
@@ -1827,7 +1942,8 @@ class _RepostScreenState extends State<RepostScreen>
           theme: baseTheme,
         ),
         build: (_) => pageShell(
-          page: 1,
+          page: currentPageIndex++,
+          totalPages: totalPagesCount,
           dark: true,
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1878,35 +1994,34 @@ class _RepostScreenState extends State<RepostScreen>
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  statCard(
-                    'Hook timing',
-                    report.hookText.isEmpty
-                        ? 'Not saved'
-                        : '${time(report.hookStart)} - ${time(report.hookEnd)}',
-                  ),
-                  statCard(
-                    'Transcript words',
-                    report.transcript.isEmpty
-                        ? 'Not saved'
-                        : report.transcript
-                              .split(RegExp(r'\s+'))
-                              .length
-                              .toString(),
-                  ),
+                  if (hasHook)
+                    statCard(
+                      'Hook timing',
+                      '${time(report.hookStart)} - ${time(report.hookEnd)}',
+                    ),
+                  if (hasTranscript)
+                    statCard(
+                      'Transcript words',
+                      report.transcript.split(RegExp(r'\s+')).length.toString(),
+                    ),
                   statCard(
                     'Caption words',
-                    safe(report.currentCaption, report.originalCaption)
+                    [
+                          report.currentCaption,
+                          report.trendyCaption,
+                          report.originalCaption,
+                        ]
+                        .firstWhere(
+                          (c) => c.trim().isNotEmpty,
+                          orElse: () => '',
+                        )
                         .split(RegExp(r'\s+'))
                         .where((word) => word.trim().isNotEmpty)
                         .length
                         .toString(),
                   ),
-                  statCard(
-                    'Hashtags',
-                    report.hashtags.isEmpty
-                        ? 'Not saved'
-                        : report.hashtags.length.toString(),
-                  ),
+                  if (hasHashtags)
+                    statCard('Hashtags', report.hashtags.length.toString()),
                 ],
               ),
             ],
@@ -1915,258 +2030,273 @@ class _RepostScreenState extends State<RepostScreen>
       ),
     );
 
-    doc.addPage(
-      pw.Page(
-        pageTheme: pw.PageTheme(
-          pageFormat: pageFormat,
-          margin: pw.EdgeInsets.zero,
-          theme: baseTheme,
-        ),
-        build: (_) => pageShell(
-          page: 2,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              reportHeader(report.title),
-              pw.SizedBox(height: 24),
-              label('01 · THE HOOK'),
-              pw.SizedBox(height: 18),
-              scriptTitle(
-                report.hookText.isEmpty
-                    ? 'Hook not generated yet'
-                    : '${time(report.hookStart)} - ${time(report.hookEnd)}',
-                size: 26,
-              ),
-              pw.SizedBox(height: 12),
-              pw.Container(
-                width: cardContentWidth,
-                padding: const pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: ink,
-                  borderRadius: const pw.BorderRadius.all(
-                    pw.Radius.circular(8),
-                  ),
+    // --- Page 2: Hook ---
+    if (hasHook) {
+      doc.addPage(
+        pw.Page(
+          pageTheme: pw.PageTheme(
+            pageFormat: pageFormat,
+            margin: pw.EdgeInsets.zero,
+            theme: baseTheme,
+          ),
+          build: (_) => pageShell(
+            page: currentPageIndex++,
+            totalPages: totalPagesCount,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                reportHeader(report.title),
+                pw.SizedBox(height: 24),
+                label('01 · THE HOOK'),
+                pw.SizedBox(height: 18),
+                scriptTitle(
+                  '${time(report.hookStart)} - ${time(report.hookEnd)}',
+                  size: 26,
                 ),
-                child: pw.Text(
-                  safe(
-                    report.hookText,
-                    'Generate Hook Timing from this reel to include the exact attention-grabbing moment.',
+                pw.SizedBox(height: 12),
+                pw.Container(
+                  width: cardContentWidth,
+                  padding: const pw.EdgeInsets.all(16),
+                  decoration: const pw.BoxDecoration(
+                    color: ink,
+                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(8)),
                   ),
-                  style: const pw.TextStyle(
-                    color: PdfColors.white,
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 24),
-              scriptTitle('Why it works', size: 18),
-              pw.SizedBox(height: 10),
-              ...[
-                'Places the strongest line in the first seconds of the reel.',
-                'Gives editors a precise timing window to reuse or highlight.',
-                'Connects the hook with caption and hashtag strategy below.',
-              ].map(
-                (item) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 8),
-                  child: pw.Bullet(
-                    text: item,
-                    style: const pw.TextStyle(fontSize: 11),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    doc.addPage(
-      pw.Page(
-        pageTheme: pw.PageTheme(
-          pageFormat: pageFormat,
-          margin: pw.EdgeInsets.zero,
-          theme: baseTheme,
-        ),
-        build: (_) => pageShell(
-          page: 3,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              reportHeader(report.title),
-              pw.SizedBox(height: 22),
-              label('02 · TRANSCRIPTION'),
-              pw.SizedBox(height: 14),
-              borderedText('Original transcript', report.transcript),
-              pw.SizedBox(height: 18),
-              scriptTitle('Translations', size: 18),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Detected language: ${safe(report.detectedLanguage, 'unknown')}',
-                style: const pw.TextStyle(fontSize: 9, color: muted),
-              ),
-              pw.SizedBox(height: 8),
-              borderedText('Saved translation', report.translated),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    doc.addPage(
-      pw.Page(
-        pageTheme: pw.PageTheme(
-          pageFormat: pageFormat,
-          margin: pw.EdgeInsets.zero,
-          theme: baseTheme,
-        ),
-        build: (_) => pageShell(
-          page: 4,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              reportHeader(report.title),
-              pw.SizedBox(height: 22),
-              label('03 · TRENDY CAPTIONS'),
-              pw.SizedBox(height: 14),
-              scriptTitle('Original caption', size: 18),
-              pw.SizedBox(height: 8),
-              borderedText('Fetched caption', report.originalCaption),
-              pw.SizedBox(height: 16),
-              scriptTitle('Selected caption', size: 18),
-              pw.SizedBox(height: 8),
-              borderedText(
-                'Caption currently on edit screen',
-                safe(report.currentCaption, report.trendyCaption),
-              ),
-              pw.SizedBox(height: 16),
-              borderedText('Generated trendy caption', report.trendyCaption),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    doc.addPage(
-      pw.Page(
-        pageTheme: pw.PageTheme(
-          pageFormat: pageFormat,
-          margin: pw.EdgeInsets.zero,
-          theme: baseTheme,
-        ),
-        build: (_) => pageShell(
-          page: 5,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              reportHeader(report.title),
-              pw.SizedBox(height: 22),
-              label('04 · KEYWORDS'),
-              pw.SizedBox(height: 14),
-              scriptTitle('Primary keywords', size: 18),
-              pw.SizedBox(height: 10),
-              keywordTable(),
-              pw.SizedBox(height: 20),
-              scriptTitle('Long-tail opportunities', size: 18),
-              pw.SizedBox(height: 10),
-              pw.Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children:
-                    (report.keywords.isEmpty
-                            ? [
-                                'reel ideas',
-                                'creator caption',
-                                'instagram growth',
-                              ]
-                            : report.keywords
-                                  .take(5)
-                                  .map((keyword) => '$keyword reel ideas'))
-                        .map(
-                          (keyword) => pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: pw.BoxDecoration(
-                              border: pw.Border.all(color: ink, width: 0.8),
-                              borderRadius: const pw.BorderRadius.all(
-                                pw.Radius.circular(14),
-                              ),
-                            ),
-                            child: pw.Text(
-                              keyword,
-                              style: const pw.TextStyle(fontSize: 9),
-                            ),
-                          ),
-                        )
-                        .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    doc.addPage(
-      pw.Page(
-        pageTheme: pw.PageTheme(
-          pageFormat: pageFormat,
-          margin: pw.EdgeInsets.zero,
-          theme: baseTheme,
-        ),
-        build: (_) => pageShell(
-          page: 6,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              reportHeader(report.title),
-              pw.SizedBox(height: 22),
-              label('05 · HASHTAGS + POSTING PLAN'),
-              pw.SizedBox(height: 14),
-              scriptTitle('Trending hashtags', size: 18),
-              pw.SizedBox(height: 10),
-              hashtagWrap(report.hashtags),
-              pw.SizedBox(height: 22),
-              pw.Row(
-                children: [
-                  pw.Expanded(child: statCard('Best time', 'Tue · 7-9pm IST')),
-                  pw.SizedBox(width: 12),
-                  pw.Expanded(
-                    child: statCard(
-                      'CTA ideas',
-                      report.hookText.isEmpty ? '3' : '5',
+                  child: pw.Text(
+                    pdfText(report.hookText),
+                    style: const pw.TextStyle(
+                      color: PdfColors.white,
+                      fontSize: 14,
+                      height: 1.45,
                     ),
                   ),
-                ],
-              ),
-              pw.SizedBox(height: 22),
-              scriptTitle('CTA ideas', size: 18),
-              pw.SizedBox(height: 10),
-              ...[
-                'Save this post for your next reel plan.',
-                'Comment the keyword if you want the full itinerary.',
-                'Tag someone who needs this creator breakdown.',
-              ].map(
-                (item) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 8),
-                  child: pw.Bullet(
-                    text: item,
-                    style: const pw.TextStyle(fontSize: 11),
+                ),
+                pw.SizedBox(height: 24),
+                scriptTitle('Why it works', size: 18),
+                pw.SizedBox(height: 10),
+                ...[
+                  'Places the strongest line in the first seconds of the reel.',
+                  'Gives editors a precise timing window to reuse or highlight.',
+                  'Connects the hook with caption and hashtag strategy below.',
+                ].map(
+                  (item) => pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 8),
+                    child: pw.Bullet(
+                      text: item,
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
                   ),
                 ),
-              ),
-              pw.Spacer(),
-              pw.Divider(color: line),
-              pw.Text(
-                'insta.save/pro · built from locally saved reel analysis',
-                style: const pw.TextStyle(fontSize: 8, color: muted),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
+
+    // --- Page 3: Transcription ---
+    if (hasTranscript) {
+      doc.addPage(
+        pw.Page(
+          pageTheme: pw.PageTheme(
+            pageFormat: pageFormat,
+            margin: pw.EdgeInsets.zero,
+            theme: baseTheme,
+          ),
+          build: (_) => pageShell(
+            page: currentPageIndex++,
+            totalPages: totalPagesCount,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                reportHeader(report.title),
+                pw.SizedBox(height: 22),
+                label('02 · TRANSCRIPTION'),
+                pw.SizedBox(height: 14),
+                borderedText('Original transcript', report.transcript),
+                pw.SizedBox(height: 18),
+                scriptTitle('Translations', size: 18),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Detected language: ${safe(report.detectedLanguage, 'unknown')}',
+                  style: const pw.TextStyle(fontSize: 9, color: muted),
+                ),
+                pw.SizedBox(height: 8),
+                borderedText('Saved translation', report.translated),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // --- Page 4: Trendy Captions ---
+    if (hasCaptions) {
+      doc.addPage(
+        pw.Page(
+          pageTheme: pw.PageTheme(
+            pageFormat: pageFormat,
+            margin: pw.EdgeInsets.zero,
+            theme: baseTheme,
+          ),
+          build: (_) => pageShell(
+            page: currentPageIndex++,
+            totalPages: totalPagesCount,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                reportHeader(report.title),
+                pw.SizedBox(height: 22),
+                label('03 · TRENDY CAPTIONS'),
+                pw.SizedBox(height: 14),
+                scriptTitle('Original caption', size: 18),
+                pw.SizedBox(height: 8),
+                borderedText('Fetched caption', report.originalCaption),
+                pw.SizedBox(height: 16),
+                scriptTitle('Selected caption', size: 18),
+                pw.SizedBox(height: 8),
+                borderedText(
+                  'Caption currently on edit screen',
+                  safe(report.currentCaption, report.trendyCaption),
+                ),
+                pw.SizedBox(height: 16),
+                borderedText('Generated Trendy Caption', report.trendyCaption),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // --- Page 5: Keywords ---
+    if (hasKeywords) {
+      doc.addPage(
+        pw.Page(
+          pageTheme: pw.PageTheme(
+            pageFormat: pageFormat,
+            margin: pw.EdgeInsets.zero,
+            theme: baseTheme,
+          ),
+          build: (_) => pageShell(
+            page: currentPageIndex++,
+            totalPages: totalPagesCount,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                reportHeader(report.title),
+                pw.SizedBox(height: 22),
+                label('04 · KEYWORDS'),
+                pw.SizedBox(height: 14),
+                scriptTitle('Primary keywords', size: 18),
+                pw.SizedBox(height: 10),
+                keywordTable(),
+                pw.SizedBox(height: 20),
+                scriptTitle('Long-tail opportunities', size: 18),
+                pw.SizedBox(height: 10),
+                pw.Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children:
+                      (report.keywords.isEmpty
+                              ? [
+                                  'reel ideas',
+                                  'creator caption',
+                                  'instagram growth',
+                                ]
+                              : report.keywords
+                                    .take(5)
+                                    .map((keyword) => '$keyword reel ideas'))
+                          .map(
+                            (keyword) => pw.Container(
+                              padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: pw.BoxDecoration(
+                                border: pw.Border.all(color: ink, width: 0.8),
+                                borderRadius: const pw.BorderRadius.all(
+                                  pw.Radius.circular(14),
+                                ),
+                              ),
+                              child: pw.Text(
+                                keyword,
+                                style: const pw.TextStyle(fontSize: 9),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // --- Page 6: Hashtags ---
+    if (hasHashtags) {
+      doc.addPage(
+        pw.Page(
+          pageTheme: pw.PageTheme(
+            pageFormat: pageFormat,
+            margin: pw.EdgeInsets.zero,
+            theme: baseTheme,
+          ),
+          build: (_) => pageShell(
+            page: currentPageIndex++,
+            totalPages: totalPagesCount,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                reportHeader(report.title),
+                pw.SizedBox(height: 22),
+                label('05 · HASHTAGS + POSTING PLAN'),
+                pw.SizedBox(height: 14),
+                scriptTitle('Trending hashtags', size: 18),
+                pw.SizedBox(height: 10),
+                hashtagWrap(report.hashtags),
+                pw.SizedBox(height: 22),
+                pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: statCard('Best time', 'Tue · 7-9pm IST'),
+                    ),
+                    pw.SizedBox(width: 12),
+                    pw.Expanded(
+                      child: statCard(
+                        'CTA ideas',
+                        report.hookText.isEmpty ? '3' : '5',
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 22),
+                scriptTitle('CTA ideas', size: 18),
+                pw.SizedBox(height: 10),
+                ...[
+                  'Save this post for your next reel plan.',
+                  'Comment the keyword if you want the full itinerary.',
+                  'Tag someone who needs this creator breakdown.',
+                ].map(
+                  (item) => pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 8),
+                    child: pw.Bullet(
+                      text: item,
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ),
+                pw.Spacer(),
+                pw.Divider(color: line),
+                pw.Text(
+                  'insta.save/pro · built from locally saved reel analysis',
+                  style: const pw.TextStyle(fontSize: 8, color: muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return doc.save();
   }
@@ -2229,6 +2359,7 @@ class _RepostScreenState extends State<RepostScreen>
             backgroundColor: Colors.white,
             appBar: _buildAppBar(targetTab),
             body: SingleChildScrollView(
+              controller: _repostScrollController,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2319,6 +2450,37 @@ class _RepostScreenState extends State<RepostScreen>
       ),
       centerTitle: true,
       actions: [
+        GestureDetector(
+          onTap: _scrollToCreateFromReel,
+          child: Container(
+            margin: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6C63FF), Color(0xFF3B82F6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 13),
+                SizedBox(width: 4),
+                Text(
+                  'AI',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         if (widget.showDeleteButton)
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -2669,40 +2831,194 @@ class _RepostScreenState extends State<RepostScreen>
     }
   }
 
-  Widget _buildCreateFromReelSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 14, 16, 0),
-          child: Text(
-            "Create from reel",
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 150,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: _reelCreationOptions.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              return _buildReelOptionCard(_reelCreationOptions[index]);
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-      ],
+  bool _showAllReelOptions = false;
+  bool _isAiBusy = false; // Guard for AI operations
+  final ScrollController _repostScrollController = ScrollController();
+  final GlobalKey _createFromReelKey = GlobalKey();
+
+  void _showLoadingOverlay(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black45,
+      builder: (_) => Center(child: _LoadingSheet(message: message)),
     );
   }
 
-  Widget _buildReelOptionCard(_ReelCreationOption option) {
+  void _hideLoadingOverlay() {
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
+  }
+
+  void _scrollToCreateFromReel() {
+    final ctx = _createFromReelKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+        alignment: 0.0,
+      );
+    }
+  }
+
+  Widget _buildCreateFromReelSection() {
+    return Container(
+      key: _createFromReelKey,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF6C63FF).withValues(alpha: 0.07),
+            const Color(0xFF3B82F6).withValues(alpha: 0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF6C63FF).withValues(alpha: 0.18),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6C63FF), Color(0xFF3B82F6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      "Create from reel",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        "NEW",
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _showAllReelOptions = !_showAllReelOptions;
+                    });
+                    if (_showAllReelOptions) {
+                      _repostScrollController.animateTo(
+                        _repostScrollController.offset + 120,
+                        duration: const Duration(milliseconds: 1000),
+                        curve: Curves.easeOut,
+                      );
+                    }
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _showAllReelOptions ? "Less" : "More",
+                        style: const TextStyle(
+                          color: Color(0xFF6C63FF),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Icon(
+                        _showAllReelOptions
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: const Color(0xFF6C63FF),
+                        size: 24,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (!_showAllReelOptions)
+            SizedBox(
+              height: 160,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: _reelCreationOptions.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  return _buildReelOptionCard(_reelCreationOptions[index]);
+                },
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.82,
+                ),
+                itemCount: _reelCreationOptions.length,
+                itemBuilder: (context, index) {
+                  return _buildReelOptionCard(
+                    _reelCreationOptions[index],
+                    isVertical: true,
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 14),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReelOptionCard(
+    _ReelCreationOption option, {
+    bool isVertical = false,
+  }) {
     final bool isDisabledForImage =
         !_isVideo &&
         (option.action == _ReelOptionAction.transcribeTranslate ||
@@ -2714,13 +3030,25 @@ class _RepostScreenState extends State<RepostScreen>
     final color = _optionAccentColor(option.action);
 
     return GestureDetector(
-      onTap: isDisabled ? null : () => _handleReelOptionTap(option),
+      onTap: () {
+        if (isDisabled) {
+          String message = "This feature is currently unavailable.";
+          if (isDisabledForImage) {
+            message = "This tool is only available for video reels.";
+          } else if (isDisabledForVideo) {
+            message = "Image(s) download is only available for image posts.";
+          }
+          UIUtils.showSnackBar(context, message);
+          return;
+        }
+        _handleReelOptionTap(option);
+      },
       child: AnimatedOpacity(
         opacity: isDisabled ? 0.38 : 1.0,
         duration: const Duration(milliseconds: 200),
         child: Container(
-          width: 125,
-          margin: const EdgeInsets.symmetric(vertical: 10),
+          width: isVertical ? null : 125,
+          margin: EdgeInsets.symmetric(vertical: isVertical ? 0 : 10),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
@@ -2767,13 +3095,41 @@ class _RepostScreenState extends State<RepostScreen>
                 ),
               ),
               if (option.isPro && !isDisabled)
+                // Positioned(
+                //   top: -9,
+                //   right: 7,
+                //   child: Container(
+                //     padding: const EdgeInsets.symmetric(
+                //       horizontal: 6,
+                //       vertical: 3,
+                //     ),
+                //     decoration: BoxDecoration(
+                //       gradient: const LinearGradient(
+                //         colors: [Color(0xFFFF9500), Color(0xFFFF4B2B)],
+                //         begin: Alignment.centerLeft,
+                //         end: Alignment.centerRight,
+                //       ),
+                //       color: color,
+                //       borderRadius: BorderRadius.circular(8),
+                //     ),
+                //     child: const Text(
+                //       "TRY",
+                //       style: TextStyle(
+                //         color: Colors.white,
+                //         fontSize: 10,
+                //         fontWeight: FontWeight.w800,
+                //         letterSpacing: 0.3,
+                //       ),
+                //     ),
+                //   ),
+                // ),
                 Positioned(
-                  top: -9,
-                  right: 7,
+                  top: -6,
+                  right: 4,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
+                      horizontal: 8,
+                      vertical: 4,
                     ),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
@@ -2781,16 +3137,22 @@ class _RepostScreenState extends State<RepostScreen>
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
-                      color: color,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: const Text(
-                      "PRO",
+                      "TRY",
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -2952,13 +3314,59 @@ class _LoadingSheetState extends State<_LoadingSheet>
   late final AnimationController _dotController;
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
+  int _messageIndex = 0;
+  late final Timer _messageTimer;
+
+  List<String> get _loadingTips {
+    final msg = widget.message.toLowerCase();
+    if (msg.contains("transcrib")) {
+      return [
+        "Uploading your reel securely...",
+        "Detecting spoken language...",
+        "Converting speech to text...",
+        "Cleaning up the transcript...",
+        "Almost done, finalizing text...",
+      ];
+    } else if (msg.contains("hook")) {
+      return [
+        "Uploading your reel securely...",
+        "Scanning video for peak moments...",
+        "Detecting high-engagement sections...",
+        "Pinpointing the best start time...",
+        "Locking in your hook timing...",
+      ];
+    } else if (msg.contains("caption")) {
+      return [
+        "Reading your content...",
+        "Matching your niche & tone...",
+        "Writing attention-grabbing lines...",
+        "Optimizing for engagement...",
+        "Polishing the final caption...",
+      ];
+    } else if (msg.contains("hashtag")) {
+      return [
+        "Analyzing your content niche...",
+        "Searching trending tags right now...",
+        "Balancing reach & specificity...",
+        "Filtering top-performing sets...",
+        "Building your hashtag strategy...",
+      ];
+    }
+    return [
+      "Brewing social media magic...",
+      "Analyzing for viral potential...",
+      "Crafting your engagement strategy...",
+      "Almost there, adding final touches...",
+      "Preparing your results...",
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
     _dotController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
     _pulseController = AnimationController(
       vsync: this,
@@ -2967,127 +3375,149 @@ class _LoadingSheetState extends State<_LoadingSheet>
     _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    _messageTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        setState(() {
+          _messageIndex = (_messageIndex + 1) % _loadingTips.length;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _dotController.dispose();
     _pulseController.dispose();
+    _messageTimer.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final lines = widget.message.split('\n');
-    final headline = lines.first;
     final subtitle = lines.length > 1 ? lines.sublist(1).join('\n') : null;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.black12,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 32),
-          // Animated icon ring
-          ScaleTransition(
-            scale: _pulseAnimation,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A1A), Color(0xFF3D3D3D)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.auto_awesome_rounded,
-                color: Colors.white,
-                size: 30,
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          // Headline
-          Text(
-            headline,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-              height: 1.3,
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 32,
+              offset: const Offset(0, 8),
             ),
           ],
-          const SizedBox(height: 28),
-          // Animated dots
-          AnimatedBuilder(
-            animation: _dotController,
-            builder: (context, _) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (i) {
-                  final delay = i / 3;
-                  final t = (_dotController.value - delay).clamp(0.0, 1.0);
-                  final scale =
-                      (t < 0.5
-                              ? Curves.easeOut.transform(t * 2)
-                              : Curves.easeIn.transform((1 - t) * 2))
-                          .clamp(0.4, 1.0);
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    child: Transform.scale(
-                      scale: scale,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color.lerp(
-                            const Color(0xFFCCCCCC),
-                            const Color(0xFF1A1A1A),
-                            scale,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Animated icon ring
+            ScaleTransition(
+              scale: _pulseAnimation,
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A1A1A), Color(0xFF3D3D3D)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            // Headline
+            Text(
+              lines.first,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Rotating Message
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              child: Text(
+                _loadingTips[_messageIndex],
+                key: ValueKey(_messageIndex),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            if (subtitle != null && subtitle.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              ),
+            ],
+            const SizedBox(height: 28),
+            // Animated dots
+            AnimatedBuilder(
+              animation: _dotController,
+              builder: (context, _) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(3, (i) {
+                    final delay = i / 3;
+                    final t = (_dotController.value - delay).clamp(0.0, 1.0);
+                    final scale =
+                        (t < 0.5
+                                ? Curves.easeOut.transform(t * 2)
+                                : Curves.easeIn.transform((1 - t) * 2))
+                            .clamp(0.4, 1.0);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color.lerp(
+                              const Color(0xFFCCCCCC),
+                              const Color(0xFF1A1A1A),
+                              scale,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
+                    );
+                  }),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -3110,128 +3540,128 @@ class _TranscriptSheet extends StatefulWidget {
 }
 
 class _TranscriptSheetState extends State<_TranscriptSheet> {
-  static const List<MapEntry<String, TranslateLanguage>> _targetLanguages = [
-    MapEntry('English', TranslateLanguage.english),
-    MapEntry('Hindi', TranslateLanguage.hindi),
-    MapEntry('Spanish', TranslateLanguage.spanish),
-    MapEntry('French', TranslateLanguage.french),
-    MapEntry('German', TranslateLanguage.german),
-    MapEntry('Arabic', TranslateLanguage.arabic),
-    MapEntry('Portuguese', TranslateLanguage.portuguese),
-    MapEntry('Russian', TranslateLanguage.russian),
-    MapEntry('Chinese', TranslateLanguage.chinese),
-    MapEntry('Japanese', TranslateLanguage.japanese),
-    MapEntry('Korean', TranslateLanguage.korean),
-    MapEntry('Italian', TranslateLanguage.italian),
-    MapEntry('Turkish', TranslateLanguage.turkish),
-    MapEntry('Indonesian', TranslateLanguage.indonesian),
-    MapEntry('Bengali', TranslateLanguage.bengali),
-    MapEntry('Tamil', TranslateLanguage.tamil),
-    MapEntry('Telugu', TranslateLanguage.telugu),
-  ];
-
-  late TranslateLanguage _targetLang;
-  late String _currentTranslation;
+  String? _selectedLanguage;
+  String? _currentTranslation;
   bool _isTranslating = false;
+  bool _transcriptExpanded = false;
+
+  final Map<String, TranslateLanguage> _languageCodes = {
+    'English': TranslateLanguage.english,
+    'Hindi': TranslateLanguage.hindi,
+    'Spanish': TranslateLanguage.spanish,
+    'French': TranslateLanguage.french,
+    'German': TranslateLanguage.german,
+    'Italian': TranslateLanguage.italian,
+    'Japanese': TranslateLanguage.japanese,
+    'Korean': TranslateLanguage.korean,
+    'Portuguese': TranslateLanguage.portuguese,
+    'Russian': TranslateLanguage.russian,
+    'Chinese': TranslateLanguage.chinese,
+  };
+
+  OnDeviceTranslator? _translator;
 
   @override
   void initState() {
     super.initState();
-    final isSourceEnglish = widget.detectedLanguage == 'en';
-    _targetLang = isSourceEnglish
-        ? TranslateLanguage.hindi
-        : TranslateLanguage.english;
-    _currentTranslation = '';
-    WidgetsBinding.instance.addPostFrameCallback((_) => _retranslate());
+    _currentTranslation = widget.translated;
   }
 
-  TranslateLanguage _whisperToMlkit(String code) {
-    final map = <String, TranslateLanguage>{
-      'en': TranslateLanguage.english,
-      'hi': TranslateLanguage.hindi,
-      'ar': TranslateLanguage.arabic,
-      'es': TranslateLanguage.spanish,
-      'fr': TranslateLanguage.french,
-      'de': TranslateLanguage.german,
-      'pt': TranslateLanguage.portuguese,
-      'ru': TranslateLanguage.russian,
-      'zh': TranslateLanguage.chinese,
-      'ja': TranslateLanguage.japanese,
-      'ko': TranslateLanguage.korean,
-      'it': TranslateLanguage.italian,
-      'tr': TranslateLanguage.turkish,
-      'pl': TranslateLanguage.polish,
-      'nl': TranslateLanguage.dutch,
-      'sv': TranslateLanguage.swedish,
-      'cs': TranslateLanguage.czech,
-      'id': TranslateLanguage.indonesian,
-      'uk': TranslateLanguage.ukrainian,
-      'gu': TranslateLanguage.gujarati,
-      'ta': TranslateLanguage.tamil,
-      'te': TranslateLanguage.telugu,
-      'bn': TranslateLanguage.bengali,
+  @override
+  void dispose() {
+    _translator?.close();
+    super.dispose();
+  }
+
+  TranslateLanguage _sourceLanguage() {
+    return BCP47Code.fromRawValue(widget.detectedLanguage) ??
+        TranslateLanguage.english;
+  }
+
+  String _languageDisplayName(String bcpCode) {
+    const names = {
+      'en': 'English',
+      'hi': 'Hindi',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German',
+      'it': 'Italian',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'pt': 'Portuguese',
+      'ru': 'Russian',
+      'zh': 'Chinese',
     };
-    return map[code] ?? TranslateLanguage.english;
+    return names[bcpCode] ?? bcpCode.toUpperCase();
   }
 
-  Future<void> _retranslate() async {
-    final srcLang = _whisperToMlkit(widget.detectedLanguage);
-    if (srcLang == _targetLang) {
-      if (mounted) {
-        setState(() {
-          _currentTranslation = widget.transcript;
-          _isTranslating = false;
-        });
-      }
-      return;
-    }
-
-    setState(() => _isTranslating = true);
-    OnDeviceTranslator? translator;
-    try {
-      final modelManager = OnDeviceTranslatorModelManager();
-      if (!await modelManager.isModelDownloaded(srcLang.bcpCode)) {
-        await modelManager.downloadModel(srcLang.bcpCode);
-      }
-      if (!await modelManager.isModelDownloaded(_targetLang.bcpCode)) {
-        if (mounted) {
-          UIUtils.showSnackBar(
-            context,
-            '📥 Downloading ${_labelFor(_targetLang)} model…',
-          );
-        }
-        await modelManager.downloadModel(_targetLang.bcpCode);
-      }
-      translator = OnDeviceTranslator(
-        sourceLanguage: srcLang,
-        targetLanguage: _targetLang,
-      );
-      final out = await translator.translateText(widget.transcript);
-      if (mounted) {
-        setState(() {
-          _currentTranslation = out;
-          _isTranslating = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _currentTranslation = 'Translation failed: $e';
-          _isTranslating = false;
-        });
-      }
-    } finally {
-      translator?.close();
-    }
-  }
-
-  String _labelFor(TranslateLanguage lang) {
-    return _targetLanguages
-        .firstWhere(
-          (e) => e.value == lang,
-          orElse: () => const MapEntry('Selected', TranslateLanguage.english),
-        )
-        .key;
+  void _showLanguagePicker() {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                'Select Language',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  ..._languageCodes.keys.map(
+                    (lang) => ListTile(
+                      title: Text(
+                        lang,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 16,
+                        ),
+                      ),
+                      trailing: _selectedLanguage == lang
+                          ? const Icon(
+                              Icons.check_rounded,
+                              color: Color(0xFF32ADE6),
+                            )
+                          : null,
+                      onTap: () {
+                        Navigator.of(context, rootNavigator: true).pop();
+                        _onLanguageChanged(lang);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _copy(String text) {
@@ -3240,58 +3670,368 @@ class _TranscriptSheetState extends State<_TranscriptSheet> {
     UIUtils.showSnackBar(context, 'Copied to clipboard ✓');
   }
 
+  void _onLanguageChanged(String? lang) async {
+    if (lang == null || lang == _selectedLanguage) return;
+
+    setState(() {
+      _selectedLanguage = lang;
+      _isTranslating = true;
+    });
+
+    try {
+      final targetLang = _languageCodes[lang] ?? TranslateLanguage.english;
+      final sourceLang = _sourceLanguage();
+
+      _translator?.close();
+      _translator = OnDeviceTranslator(
+        sourceLanguage: sourceLang,
+        targetLanguage: targetLang,
+      );
+
+      final modelManager = OnDeviceTranslatorModelManager();
+
+      // Both source and target models must be on-device for translation to work.
+      final sourceCode = sourceLang.bcpCode;
+      final targetCode = targetLang.bcpCode;
+      final sourceReady = await modelManager.isModelDownloaded(sourceCode);
+      final targetReady = await modelManager.isModelDownloaded(targetCode);
+
+      if (!sourceReady || !targetReady) {
+        if (mounted) {
+          UIUtils.showSnackBar(context, 'Downloading language models…');
+        }
+        if (!sourceReady) {
+          await modelManager.downloadModel(sourceCode, isWifiRequired: false);
+        }
+        if (!targetReady) {
+          await modelManager.downloadModel(targetCode, isWifiRequired: false);
+        }
+      }
+
+      final result = await _translator!.translateText(widget.transcript);
+      if (mounted && result.isNotEmpty) {
+        setState(() => _currentTranslation = result);
+      }
+    } catch (e) {
+      if (mounted) UIUtils.showSnackBar(context, 'Translation failed');
+    } finally {
+      if (mounted) setState(() => _isTranslating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (_, sc) => Material(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    const blue = Color(0xFF32ADE6);
+    final detectedName = _languageDisplayName(widget.detectedLanguage);
+    final canCopy = _selectedLanguage != null && !_isTranslating;
+
+    final mq = MediaQuery.of(context);
+    final maxHeight = mq.size.height - mq.padding.top - 16;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(height: 10),
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              // Handle
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 14),
+              // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Stack(
                   children: [
-                    const Expanded(
-                      child: Text(
-                        'Transcribe',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black,
+                    const Text(
+                      'Translate',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.grey.shade400),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: Colors.black,
+                          ),
                         ),
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey.shade400),
+                  ],
+                ),
+              ),
+              // Card
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Source section ──
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Detected as ',
+                                    style: TextStyle(
+                                      color: Colors.black54,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    detectedName,
+                                    style: const TextStyle(
+                                      color: Colors.black54,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.black38,
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                                alignment: Alignment.topLeft,
+                                child: _transcriptExpanded
+                                    ? SelectionArea(
+                                        child: Text(
+                                          widget.transcript,
+                                          style: const TextStyle(
+                                            color: Colors.black87,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.35,
+                                          ),
+                                        ),
+                                      )
+                                    : Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.transcript,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () => setState(
+                                              () => _transcriptExpanded = true,
+                                            ),
+                                            child: const Text(
+                                              'more',
+                                              style: TextStyle(
+                                                color: blue,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: Colors.black,
+                        const Divider(height: 1, color: Colors.black12),
+                        // ── Target section ──
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              GestureDetector(
+                                onTap: _showLanguagePicker,
+                                behavior: HitTestBehavior.opaque,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _selectedLanguage ?? 'Select Language',
+                                        style: TextStyle(
+                                          color: _selectedLanguage != null
+                                              ? blue
+                                              : Colors.black38,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: _selectedLanguage != null
+                                            ? blue
+                                            : Colors.black38,
+                                        size: 16,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              if (_selectedLanguage == null)
+                                GestureDetector(
+                                  onTap: _showLanguagePicker,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: const Text(
+                                    'Tap to select a language',
+                                    style: TextStyle(
+                                      color: Colors.black26,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                )
+                              else if (_isTranslating)
+                                const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: blue,
+                                  ),
+                                )
+                              else
+                                SelectionArea(
+                                  child: Text(
+                                    _currentTranslation ?? '',
+                                    style: const TextStyle(
+                                      color: blue,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Copy buttons
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _copy(widget.transcript),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.black12),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.copy_rounded,
+                                color: Colors.black87,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Copy Transcription',
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: canCopy
+                            ? () => _copy(_currentTranslation ?? '')
+                            : null,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.black12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.translate_rounded,
+                                color: canCopy
+                                    ? Colors.black87
+                                    : Colors.black26,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Copy Translation',
+                                style: TextStyle(
+                                  color: canCopy
+                                      ? Colors.black87
+                                      : Colors.black26,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -3299,88 +4039,8 @@ class _TranscriptSheetState extends State<_TranscriptSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: sc,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Transcription',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _TextBox(
-                        text: widget.transcript,
-                        onCopy: () => _copy(widget.transcript),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Translate as per your preference',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildLanguageDropdown(),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Translation in ${_labelFor(_targetLang)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _TextBox(
-                        text: _isTranslating
-                            ? 'Translating…'
-                            : _currentTranslation,
-                        onCopy: () => _copy(_currentTranslation),
-                        isLoading: _isTranslating,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<TranslateLanguage>(
-          dropdownColor: Colors.white,
-          isExpanded: true,
-          value: _targetLang,
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black54),
-          style: const TextStyle(fontSize: 16, color: Colors.black),
-          items: _targetLanguages
-              .map((e) => DropdownMenuItem(value: e.value, child: Text(e.key)))
-              .toList(),
-          onChanged: _isTranslating
-              ? null
-              : (v) {
-                  if (v == null || v == _targetLang) return;
-                  setState(() => _targetLang = v);
-                  _retranslate();
-                },
+          ),
         ),
       ),
     );
@@ -3390,12 +4050,7 @@ class _TranscriptSheetState extends State<_TranscriptSheet> {
 class _TextBox extends StatelessWidget {
   final String text;
   final VoidCallback onCopy;
-  final bool isLoading;
-  const _TextBox({
-    required this.text,
-    required this.onCopy,
-    this.isLoading = false,
-  });
+  const _TextBox({required this.text, required this.onCopy});
 
   @override
   Widget build(BuildContext context) {
@@ -3414,18 +4069,17 @@ class _TextBox extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
-                color: isLoading ? Colors.black54 : Colors.black87,
-                fontStyle: isLoading ? FontStyle.italic : FontStyle.normal,
+                color: Colors.black87,
               ),
             ),
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: isLoading ? null : onCopy,
-            child: Icon(
+            onTap: onCopy,
+            child: const Icon(
               Icons.copy_outlined,
               size: 18,
-              color: isLoading ? Colors.grey.shade400 : Colors.black54,
+              color: Colors.black54,
             ),
           ),
         ],
@@ -4347,7 +5001,7 @@ class _TagEditorSheetState extends State<TagEditorSheet> {
 class _ExportPdfSheet extends StatelessWidget {
   final String thumbnailPath;
   final String thumbnailUrl;
-  final Future<void> Function() onDownload;
+  final Future<void> Function(String? shareTarget) onDownload;
 
   const _ExportPdfSheet({
     required this.thumbnailPath,
@@ -4451,7 +5105,7 @@ class _ExportPdfSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '5 pages · cover · transcription · hook · caption + hashtags · credits',
+                  'Insights · cover · transcription · hook · caption · hashtags',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                   textAlign: TextAlign.center,
                 ),
@@ -4460,13 +5114,13 @@ class _ExportPdfSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Download button
+          // Preview & Download button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () async {
                 Navigator.pop(context);
-                await onDownload();
+                await onDownload(null);
               },
               icon: const Icon(
                 Icons.picture_as_pdf_outlined,
@@ -4474,7 +5128,7 @@ class _ExportPdfSheet extends StatelessWidget {
                 size: 18,
               ),
               label: const Text(
-                'Preview & download PDF',
+                'Preview & Download PDF',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 15,
@@ -4506,48 +5160,68 @@ class _ExportPdfSheet extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _ShareButton(
-                icon: Icons.chat_rounded,
+                iconWidget: const FaIcon(
+                  FontAwesomeIcons.whatsapp,
+                  color: Color(0xFF25D366),
+                  size: 22,
+                ),
                 label: 'WhatsApp',
                 color: const Color(0xFF25D366),
                 onTap: () async {
                   Navigator.pop(context);
-                  await onDownload();
+                  await onDownload('whatsapp');
                 },
               ),
               _ShareButton(
-                icon: Icons.camera_alt_outlined,
+                iconWidget: const FaIcon(
+                  FontAwesomeIcons.instagram,
+                  color: Color(0xFFE1306C),
+                  size: 22,
+                ),
                 label: 'Instagram',
                 color: const Color(0xFFE1306C),
                 onTap: () async {
                   Navigator.pop(context);
-                  await onDownload();
+                  await onDownload('instagram');
                 },
               ),
               _ShareButton(
-                icon: Icons.drive_folder_upload_outlined,
+                iconWidget: const FaIcon(
+                  FontAwesomeIcons.googleDrive,
+                  color: Color(0xFF4285F4),
+                  size: 22,
+                ),
                 label: 'Drive',
                 color: const Color(0xFF4285F4),
                 onTap: () async {
                   Navigator.pop(context);
-                  await onDownload();
+                  await onDownload('drive');
                 },
               ),
               _ShareButton(
-                icon: Icons.mail_outline_rounded,
+                iconWidget: const Icon(
+                  Icons.mail_outline_rounded,
+                  color: Color(0xFFEA4335),
+                  size: 22,
+                ),
                 label: 'Mail',
                 color: const Color(0xFFEA4335),
                 onTap: () async {
                   Navigator.pop(context);
-                  await onDownload();
+                  await onDownload('mail');
                 },
               ),
               _ShareButton(
-                icon: Icons.more_horiz_rounded,
+                iconWidget: const Icon(
+                  Icons.more_horiz_rounded,
+                  color: Colors.grey,
+                  size: 22,
+                ),
                 label: 'More',
                 color: Colors.grey,
                 onTap: () async {
                   Navigator.pop(context);
-                  await onDownload();
+                  await onDownload('more');
                 },
               ),
             ],
@@ -4559,7 +5233,10 @@ class _ExportPdfSheet extends StatelessWidget {
 
   Widget _buildThumbnail() {
     if (thumbnailPath.isNotEmpty && File(thumbnailPath).existsSync()) {
-      return Image.file(File(thumbnailPath), fit: BoxFit.cover);
+      final ext = thumbnailPath.toLowerCase();
+      if (!ext.endsWith('.mp4') && !ext.endsWith('.mov')) {
+        return Image.file(File(thumbnailPath), fit: BoxFit.cover);
+      }
     }
     if (thumbnailUrl.isNotEmpty) {
       return CachedNetworkImage(
@@ -4583,13 +5260,13 @@ class _ExportPdfSheet extends StatelessWidget {
 }
 
 class _ShareButton extends StatelessWidget {
-  final IconData icon;
+  final Widget iconWidget;
   final String label;
   final Color color;
   final VoidCallback onTap;
 
   const _ShareButton({
-    required this.icon,
+    required this.iconWidget,
     required this.label,
     required this.color,
     required this.onTap,
@@ -4610,7 +5287,7 @@ class _ShareButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: color.withAlpha(60)),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Center(child: iconWidget),
           ),
           const SizedBox(height: 6),
           Text(
@@ -4623,7 +5300,7 @@ class _ShareButton extends StatelessWidget {
   }
 }
 
-class _ReelReportPreviewScreen extends StatelessWidget {
+class _ReelReportPreviewScreen extends StatefulWidget {
   final Uint8List pdfBytes;
   final String filename;
   final String title;
@@ -4636,8 +5313,36 @@ class _ReelReportPreviewScreen extends StatelessWidget {
     required this.subtitle,
   });
 
+  @override
+  State<_ReelReportPreviewScreen> createState() =>
+      _ReelReportPreviewScreenState();
+}
+
+class _ReelReportPreviewScreenState extends State<_ReelReportPreviewScreen> {
+  static const MethodChannel _mediaStoreChannel = MethodChannel('media_store');
+
+  Future<void> _downloadPdf() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${widget.filename}');
+      await file.writeAsBytes(widget.pdfBytes);
+      final result = await _mediaStoreChannel.invokeMethod<String>(
+        'saveMedia',
+        {'path': file.path, 'mediaType': 'pdf'},
+      );
+      if (mounted) {
+        UIUtils.showSnackBar(
+          context,
+          result != null ? 'PDF saved to Downloads' : 'Failed to save PDF',
+        );
+      }
+    } catch (e) {
+      if (mounted) UIUtils.showSnackBar(context, 'Failed to save PDF: $e');
+    }
+  }
+
   Future<void> _sharePdf() {
-    return Printing.sharePdf(bytes: pdfBytes, filename: filename);
+    return Printing.sharePdf(bytes: widget.pdfBytes, filename: widget.filename);
   }
 
   @override
@@ -4669,7 +5374,7 @@ class _ReelReportPreviewScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          title,
+                          widget.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -4680,7 +5385,7 @@ class _ReelReportPreviewScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          subtitle,
+                          widget.subtitle,
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey.shade600,
@@ -4692,7 +5397,7 @@ class _ReelReportPreviewScreen extends StatelessWidget {
                   const SizedBox(width: 10),
                   _PdfHeaderButton(
                     icon: Icons.download_rounded,
-                    onTap: _sharePdf,
+                    onTap: _downloadPdf,
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(
@@ -4717,8 +5422,8 @@ class _ReelReportPreviewScreen extends StatelessWidget {
             ),
             Expanded(
               child: PdfPreview(
-                build: (_) async => pdfBytes,
-                pdfFileName: filename,
+                build: (_) async => widget.pdfBytes,
+                pdfFileName: widget.filename,
                 canChangeOrientation: false,
                 canChangePageFormat: false,
                 canDebug: false,
@@ -4918,13 +5623,12 @@ class _DownloadAssetsSheetState extends State<_DownloadAssetsSheet> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: widget.allMediaPaths.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 0.9,
-                          ),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: widget.allMediaPaths.length < 3 ? 2 : 3,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 0.9,
+                      ),
                       itemBuilder: (context, index) {
                         final path = widget.allMediaPaths[index];
                         final isSelected = _selectedPaths.contains(path);

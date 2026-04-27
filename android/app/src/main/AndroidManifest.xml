@@ -110,10 +110,23 @@
                     android:resource="@xml/provider_paths"/>
         </provider>
 
+        <!-- Required by social_sharing_plus for sharing files to WhatsApp and other apps -->
+        <provider
+                android:name="androidx.core.content.FileProvider"
+                android:authorities="${applicationId}.fileprovider"
+                android:exported="false"
+                android:grantUriPermissions="true">
+            <meta-data
+                    android:name="android.support.FILE_PROVIDER_PATHS"
+                    android:resource="@xml/provider_paths"/>
+        </provider>
+
     </application>
 
     <queries>
         <package android:name="com.instagram.android" />
+        <package android:name="com.google.android.apps.docs" />
+        <package android:name="com.google.android.gm" />
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="image/*" />
