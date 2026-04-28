@@ -101,9 +101,9 @@ class _HomeScreenState extends State<HomeScreen>
       action: _CreatorStudioAction.trendyHashtags,
     ),
     _CreatorStudioOption(
-      title: "Save & Export Content",
-      subtitle: "Download reels, carousels and stories locally",
-      icon: Icons.download_rounded,
+      title: "Download Images & PDF",
+      subtitle: "Save posts and carousels as images or PDF",
+      icon: Icons.picture_as_pdf_outlined,
       action: _CreatorStudioAction.downloadAssets,
     ),
   ];
@@ -1228,97 +1228,100 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildCreatorStudioButton() {
-    return Positioned(
-      right: 16,
-      bottom: 112,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          GestureDetector(
-            onTap: _showCreatorStudioSheet,
-            child: Container(
-              height: 58,
-              padding: const EdgeInsets.only(left: 14, right: 22),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A1A), Color(0xFF3A3A3A)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
+    return ValueListenableBuilder<bool>(
+      valueListenable: IAPService().isPremium,
+      builder: (context, isPremium, _) => Positioned(
+        right: 16,
+        bottom: isPremium ? 16 : 112,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              onTap: _showCreatorStudioSheet,
+              child: Container(
+                height: 58,
+                padding: const EdgeInsets.only(left: 14, right: 22),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A1A1A), Color(0xFF3A3A3A)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                   ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RotationTransition(
-                    turns: Tween<double>(begin: 0, end: 0.125).animate(
-                      CurvedAnimation(
-                        parent: _creatorStudioController,
-                        curve: Curves.easeOutCubic,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.28),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RotationTransition(
+                      turns: Tween<double>(begin: 0, end: 0.125).animate(
+                        CurvedAnimation(
+                          parent: _creatorStudioController,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                       ),
                     ),
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome_rounded,
+                    const SizedBox(width: 12),
+                    const Text(
+                      "Creator Studio",
+                      style: TextStyle(
                         color: Colors.white,
-                        size: 22,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    "Creator Studio",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: -6,
-            right: 4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Text(
-                "NEW",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w800,
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
+            Positioned(
+              top: -6,
+              right: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  "NEW",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2522,6 +2525,7 @@ class _GroqResultSheetState extends State<_GroqResultSheet> {
   bool _isLoading = true;
   dynamic _generatedResult; // Can be String or List<String>
   String? _error;
+  bool _showAll = false;
 
   @override
   void initState() {
@@ -2601,7 +2605,7 @@ class _GroqResultSheetState extends State<_GroqResultSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Your Paragraph",
+                    "Your Promt",
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -2682,72 +2686,113 @@ class _GroqResultSheetState extends State<_GroqResultSheet> {
                       ),
                     )
                   else if (isListData)
-                    ...(_generatedResult as List).asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final variant = entry.value.toString();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12.0),
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.black.withValues(alpha: 0.08),
+                    ...() {
+                      final list = _generatedResult as List;
+                      final visibleItems = _showAll
+                          ? list
+                          : list.take(4).toList();
+                      return [
+                        ...visibleItems.asMap().entries.map((entry) {
+                          final variant = entry.value.toString();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12.0),
+                            child: Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Stack(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      20,
+                                      48,
+                                      16,
+                                    ),
+                                    child: SelectableText(
+                                      variant,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        height: 1.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: IconButton(
+                                      onPressed: () {
+                                        Clipboard.setData(
+                                          ClipboardData(text: variant),
+                                        );
+                                        UIUtils.showSnackBar(
+                                          context,
+                                          "Copied successfully!",
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.copy_rounded,
+                                        size: 18,
+                                        color: Colors.black45,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  20,
-                                  48,
-                                  16,
+                          );
+                        }),
+                        if (!_showAll && list.length > 4)
+                          GestureDetector(
+                            onTap: () => setState(() => _showAll = true),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.08),
                                 ),
-                                child: SelectableText(
-                                  variant,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    height: 1.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    "Show more",
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black54,
+                                    ),
                                   ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: IconButton(
-                                  onPressed: () {
-                                    Clipboard.setData(
-                                      ClipboardData(text: variant),
-                                    );
-                                    UIUtils.showSnackBar(
-                                      context,
-                                      "Copied successfully!",
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.copy_rounded,
-                                    size: 18,
-                                    color: Colors.black45,
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.black54,
+                                    size: 20,
                                   ),
-                                  visualDensity: VisualDensity.compact,
-                                ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      );
-                    })
+                      ];
+                    }()
                   else
                     Container(
                       width: double.infinity,

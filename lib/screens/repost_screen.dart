@@ -147,12 +147,12 @@ class _RepostScreenState extends State<RepostScreen>
       isPro: false,
     ),
     _ReelCreationOption(
-      title: 'Transcribe/\nTranslate',
+      title: 'Transcribe &\nTranslate',
       icon: Icons.translate_rounded,
       action: _ReelOptionAction.transcribeTranslate,
     ),
     _ReelCreationOption(
-      title: 'Hook\nTiming',
+      title: 'Hook\nGenerator',
       icon: Icons.whatshot_rounded,
       action: _ReelOptionAction.hookTiming,
     ),
@@ -172,7 +172,7 @@ class _RepostScreenState extends State<RepostScreen>
       action: _ReelOptionAction.exportPdf,
     ),
     _ReelCreationOption(
-      title: 'Download\nImages/PDF',
+      title: 'Download\nImages & PDF',
       icon: Icons.download_rounded,
       action: _ReelOptionAction.downloadAssets,
     ),
@@ -2452,33 +2452,75 @@ class _RepostScreenState extends State<RepostScreen>
       actions: [
         GestureDetector(
           onTap: _scrollToCreateFromReel,
-          child: Container(
-            margin: const EdgeInsets.only(right: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6C63FF), Color(0xFF3B82F6)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(right: 8, top: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6C63FF), Color(0xFF3B82F6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Colors.white,
+                      size: 13,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'AI',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 13),
-                SizedBox(width: 4),
-                Text(
-                  'AI',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
+              Positioned(
+                top: -4,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    "NEW",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 6,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         if (widget.showDeleteButton)
