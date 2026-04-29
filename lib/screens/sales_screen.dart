@@ -17,7 +17,8 @@ void main() async {
 }
 
 class SalesScreen extends StatefulWidget {
-  const SalesScreen({super.key});
+  final bool showCreatorReel;
+  const SalesScreen({super.key, this.showCreatorReel = false});
 
   @override
   State<SalesScreen> createState() => _SalesScreenState();
@@ -26,23 +27,30 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   bool _isLoading = true;
   SalesConfig? _config;
+  late bool _isCreatorReelSelected;
 
   @override
   void initState() {
     super.initState();
+    _isCreatorReelSelected = widget.showCreatorReel;
     _loadConfig();
     IAPService().isPremium.addListener(_onPremiumChanged);
+    IAPService().isPremiumPlus.addListener(_onPremiumChanged);
   }
 
   @override
   void dispose() {
     IAPService().isPremium.removeListener(_onPremiumChanged);
+    IAPService().isPremiumPlus.removeListener(_onPremiumChanged);
     super.dispose();
   }
 
   void _onPremiumChanged() {
-    if (IAPService().isPremium.value && mounted) {
-      Navigator.of(context).pop();
+    if (mounted) {
+      if ((!_isCreatorReelSelected && IAPService().isPremium.value) ||
+          (_isCreatorReelSelected && IAPService().isPremiumPlus.value)) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
@@ -110,6 +118,47 @@ class _SalesScreenState extends State<SalesScreen> {
     return fallback;
   }
 
+  IconData _getIconForFeature(String text) {
+    final lower = text.toLowerCase();
+
+    // Creator Reel
+    if (lower.contains('caption')) {
+      return Icons.edit_note;
+    }
+    if (lower.contains('hook')) {
+      return Icons.whatshot;
+    }
+    if (lower.contains('hashtag')) {
+      return Icons.tag;
+    }
+    if (lower.contains('transcribe') ||
+        lower.contains('translate') ||
+        lower.contains('audio')) {
+      return Icons.translate;
+    }
+
+    // Premium features
+    if (lower.contains('ad-free') ||
+        lower.contains('no ad') ||
+        lower.contains('remove ad')) {
+      return Icons.block;
+    }
+    if (lower.contains('repost') || lower.contains('unlimited')) {
+      return Icons.repeat;
+    }
+    if (lower.contains('stor') || lower.contains('highlight')) {
+      return Icons.amp_stories;
+    }
+    if (lower.contains('photo') || lower.contains('video')) {
+      return Icons.photo_library;
+    }
+    if (lower.contains('gallery')) {
+      return Icons.collections;
+    }
+
+    return Icons.check_circle_outline;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Set status bar icons to light (white) for dark background
@@ -144,16 +193,90 @@ class _SalesScreenState extends State<SalesScreen> {
                     children: [
                       // Scrollable Content
                       Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.only(
+                            left: 24.0,
+                            right: 24.0,
+                            top: 200.0,
+                          ),
                           child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.start,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              // TABS
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 24),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(25),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: GestureDetector(
+                                        onTap: () => setState(
+                                          () => _isCreatorReelSelected = false,
+                                        ),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: !_isCreatorReelSelected
+                                                ? const Color(0xFF6C63FF)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              25,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            "Remove Ads",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: GestureDetector(
+                                        onTap: () => setState(
+                                          () => _isCreatorReelSelected = true,
+                                        ),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _isCreatorReelSelected
+                                                ? const Color(0xFF6C63FF)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              25,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            "Creator Reel",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               // HEADER
                               Text(
-                                _config?.titleText ??
-                                    'Video Downloader Premium',
+                                _isCreatorReelSelected
+                                    ? 'Creator Studio Pro'
+                                    : (_config?.titleText ??
+                                          'Video Downloader Premium'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: _config?.titleColor ?? Colors.white,
@@ -181,44 +304,79 @@ class _SalesScreenState extends State<SalesScreen> {
                                 fontSize: _config?.featuresTitleSize,
                               ),
                               const SizedBox(height: 16),
-                              if (_config != null)
-                                Center(
-                                  child: Container(
-                                    constraints: BoxConstraints(
-                                      maxWidth:
-                                          MediaQuery.of(context).size.width *
-                                          0.85,
-                                    ),
-                                    child: IntrinsicWidth(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: _config!.features
-                                            .map(
-                                              (f) => _FeatureRow(
-                                                text: f['text'],
-                                                textSize: _config!.featureSize,
-                                                textColor:
-                                                    _config!.featureColor,
-                                              ),
-                                            )
-                                            .toList(),
-                                      ),
+                              Center(
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth:
+                                        MediaQuery.of(context).size.width *
+                                        0.85,
+                                  ),
+                                  child: IntrinsicWidth(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children:
+                                          (_isCreatorReelSelected
+                                                  ? [
+                                                      {
+                                                        'text':
+                                                            'Generate Trendy Captions',
+                                                      },
+                                                      {
+                                                        'text':
+                                                            'AI Hook Generation',
+                                                      },
+                                                      {
+                                                        'text':
+                                                            'Trending Hashtags',
+                                                      },
+                                                      {
+                                                        'text':
+                                                            'Transcribe & Translate Audio',
+                                                      },
+                                                    ]
+                                                  : (_config?.features ?? []))
+                                              .map(
+                                                (f) => _FeatureRow(
+                                                  text: f['text'],
+                                                  icon: _getIconForFeature(
+                                                    f['text'],
+                                                  ),
+                                                  textSize:
+                                                      _config?.featureSize ??
+                                                      14,
+                                                  textColor:
+                                                      _config?.featureColor ??
+                                                      Colors.white,
+                                                ),
+                                              )
+                                              .toList(),
                                     ),
                                   ),
                                 ),
+                              ),
                               const SizedBox(height: 40),
 
-                              // Week PLAN
+                              // PLAN
                               if (_config != null && _config!.plans.isNotEmpty)
                                 _PlanCard(
                                   index: 0,
                                   isSelected: true,
-                                  title: _config!.plans[0]['title'],
-                                  subtitle: IAPService().getTrialText(),
-                                  price: IAPService().getWeeklyPrice(),
-                                  originalPrice: _getOriginalPrice(),
-                                  badgeText: _config!.plans[0]['badgeText'],
+                                  title: _isCreatorReelSelected
+                                      ? 'Creator Pro Plan'
+                                      : _config!.plans[0]['title'],
+                                  subtitle: _isCreatorReelSelected
+                                      ? IAPService().getCreatorReelTrialText()
+                                      : IAPService().getTrialText(),
+                                  price: _isCreatorReelSelected
+                                      ? IAPService().getCreatorReelPrice()
+                                      : IAPService().getWeeklyPrice(),
+                                  originalPrice: _isCreatorReelSelected
+                                      ? null
+                                      : _getOriginalPrice(),
+                                  badgeText: _isCreatorReelSelected
+                                      ? 'AI Powered'
+                                      : _config!.plans[0]['badgeText'],
                                   titleSize: _config!.planSize,
                                   titleColor: _config!.planColor,
                                   priceColor: _config!.priceColor,
@@ -258,7 +416,11 @@ class _SalesScreenState extends State<SalesScreen> {
                               ),
                               child: ElevatedButton(
                                 onPressed: () {
-                                  IAPService().buyWeekly();
+                                  if (_isCreatorReelSelected) {
+                                    IAPService().buyCreatorReel();
+                                  } else {
+                                    IAPService().buyWeekly();
+                                  }
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
@@ -409,22 +571,28 @@ class _FeatureRow extends StatelessWidget {
   final String text;
   final double textSize;
   final Color textColor;
+  final IconData? icon;
 
   const _FeatureRow({
     required this.text,
     required this.textSize,
     required this.textColor,
+    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check, color: Color(0xFF8a878c), size: 20),
+          Icon(
+            icon ?? Icons.check_circle_outline,
+            color: const Color(0xFF8a878c),
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Flexible(
             child: Text(

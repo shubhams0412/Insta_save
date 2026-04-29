@@ -196,6 +196,7 @@ class _RepostScreenState extends State<RepostScreen>
   bool _isVideo = false;
   double _imageAspectRatio = 1.0;
   bool _isReposting = false;
+  bool _isPdfExporting = false;
   bool _didOpenInstagram = false; // Flag to track if we launched Instagram
 
   @override
@@ -1210,8 +1211,8 @@ class _RepostScreenState extends State<RepostScreen>
   }
 
   Future<void> _saveImagesAsPdf(List<String> paths) async {
+    setState(() => _isPdfExporting = true);
     try {
-      UIUtils.showSnackBar(context, 'Generating PDF…');
       final doc = pw.Document();
 
       for (final path in paths) {
@@ -1239,6 +1240,7 @@ class _RepostScreenState extends State<RepostScreen>
       );
 
       if (mounted) {
+        setState(() => _isPdfExporting = false);
         if (uriString != null) {
           UIUtils.showSnackBar(context, 'PDF saved to gallery ✓');
         } else {
@@ -1248,14 +1250,15 @@ class _RepostScreenState extends State<RepostScreen>
     } catch (e) {
       debugPrint('PDF generation failed: $e');
       if (mounted) {
+        setState(() => _isPdfExporting = false);
         UIUtils.showSnackBar(context, 'PDF generation failed');
       }
     }
   }
 
   Future<void> _exportAsPdf([String? shareTarget]) async {
+    setState(() => _isPdfExporting = true);
     try {
-      UIUtils.showSnackBar(context, 'Preparing PDF…');
       final report = await _loadReelReportData();
       final pdfBytes = await _buildReelReportPdf(report);
       final date = DateTime.now();
@@ -1374,6 +1377,8 @@ class _RepostScreenState extends State<RepostScreen>
       if (mounted) {
         UIUtils.showSnackBar(context, 'PDF export failed. Please try again.');
       }
+    } finally {
+      if (mounted) setState(() => _isPdfExporting = false);
     }
   }
 
@@ -2373,19 +2378,19 @@ class _RepostScreenState extends State<RepostScreen>
             ),
             bottomNavigationBar: _buildRepostButton(),
           ),
-          if (_isReposting)
+          if (_isReposting || _isPdfExporting)
             Positioned.fill(
               child: Container(
                 color: Colors.black45,
-                child: const Center(
+                child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(color: Colors.white),
-                      SizedBox(height: 12),
+                      const CircularProgressIndicator(color: Colors.white),
+                      const SizedBox(height: 12),
                       Text(
-                        "Preparing...",
-                        style: TextStyle(
+                        _isPdfExporting ? "Preparing PDF…" : "Preparing...",
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,

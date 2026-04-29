@@ -15,10 +15,13 @@ class IAPService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
 
   final ValueNotifier<bool> isPremium = ValueNotifier(false);
+  final ValueNotifier<bool> isPremiumPlus = ValueNotifier(false);
 
   static String weeklyProductId =
       RemoteConfigService().salesConfig?.plans.first['productId'] ??
       "com.video.downloader.saver.manager.week";
+
+  static String creatorReelProductId = "com.video.downloader.creator.week";
 
   List<ProductDetails> _products = [];
 
@@ -43,7 +46,10 @@ class IAPService {
 
   // ---------------- PRODUCTS ----------------
   Future<void> _fetchProducts() async {
-    final response = await _iap.queryProductDetails({weeklyProductId});
+    final response = await _iap.queryProductDetails({
+      weeklyProductId,
+      creatorReelProductId,
+    });
 
     _products = response.productDetails;
 
@@ -59,7 +65,23 @@ class IAPService {
   }
 
   String getWeeklyPrice() {
-    final product = getProduct(weeklyProductId);
+    return _getPriceForProduct(weeklyProductId);
+  }
+
+  double getWeeklyPriceValue() {
+    return _getPriceValueForProduct(weeklyProductId);
+  }
+
+  String getCreatorReelPrice() {
+    return _getPriceForProduct(creatorReelProductId);
+  }
+
+  double getCreatorReelPriceValue() {
+    return _getPriceValueForProduct(creatorReelProductId);
+  }
+
+  String _getPriceForProduct(String productId) {
+    final product = getProduct(productId);
     if (product == null) return "\$1.99";
 
     if (product is GooglePlayProductDetails) {
@@ -80,8 +102,8 @@ class IAPService {
     return product.price;
   }
 
-  double getWeeklyPriceValue() {
-    final product = getProduct(weeklyProductId);
+  double _getPriceValueForProduct(String productId) {
+    final product = getProduct(productId);
     if (product == null) return 1.99;
 
     if (product is GooglePlayProductDetails) {
@@ -145,17 +167,43 @@ class IAPService {
     return "";
   }
 
+  String getCreatorReelTrialText() {
+    final product = getProduct(creatorReelProductId);
+    if (product == null) return "3 Days Free Trial";
+
+    if (product is GooglePlayProductDetails) {
+      final offers = product.productDetails.subscriptionOfferDetails;
+      if (offers == null || offers.isEmpty) return "3 Days Free Trial";
+
+      final phases = offers.first.pricingPhases;
+      try {
+        final free = phases.firstWhere((p) => p.priceAmountMicros == 0);
+        return "${free.billingPeriod.replaceAll('P', '').replaceAll('D', ' Days')} Free Trial";
+      } catch (_) {
+        return "3 Days Free Trial";
+      }
+    }
+    return "3 Days Free Trial";
+  }
+
   // ---------------- BUY ----------------
   Future<void> buyWeekly() async {
-    final product = getProduct(weeklyProductId);
+    await _buyProduct(weeklyProductId);
+  }
+
+  Future<void> buyCreatorReel() async {
+    await _buyProduct(creatorReelProductId);
+  }
+
+  Future<void> _buyProduct(String productId) async {
+    final product = getProduct(productId);
 
     if (product == null) {
-      debugPrint("Product not found");
+      debugPrint("Product not found: $productId");
       return;
     }
 
     final param = PurchaseParam(productDetails: product);
-
     await _iap.buyNonConsumable(purchaseParam: param);
   }
 
@@ -164,10 +212,8 @@ class IAPService {
     try {
       debugPrint("Restore Purchases: Starting...");
 
-      // Track if any purchases were restored
       bool hasRestoredPurchases = false;
 
-      // Listen to purchase stream temporarily
       StreamSubscription<List<PurchaseDetails>>? tempSubscription;
       tempSubscription = _iap.purchaseStream.listen((purchases) {
         for (var purchase in purchases) {
@@ -180,13 +226,8 @@ class IAPService {
         }
       });
 
-      // Trigger restore
       await _iap.restorePurchases();
-
-      // Wait a bit for the stream to process
       await Future.delayed(const Duration(seconds: 2));
-
-      // Cancel temp subscription
       await tempSubscription.cancel();
 
       debugPrint("Restore Purchases: Completed - Found: $hasRestoredPurchases");
@@ -215,20 +256,26 @@ class IAPService {
 
   // ---------------- PREMIUM UNLOCK ----------------
   Future<void> _grantPremium(PurchaseDetails purchase) async {
-    final token = purchase.verificationData.serverVerificationData;
-
-    debugPrint("Purchase Token: $token");
-
-    isPremium.value = true;
+    debugPrint(
+      "Purchase Token: ${purchase.verificationData.serverVerificationData}",
+    );
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool("isPremium", true);
+
+    if (purchase.productID == creatorReelProductId) {
+      isPremiumPlus.value = true;
+      await prefs.setBool("isPremiumPlus", true);
+    } else {
+      isPremium.value = true;
+      await prefs.setBool("isPremium", true);
+    }
   }
 
   // ---------------- LOCAL RESTORE ----------------
   Future<void> _loadPremiumFromLocal() async {
     final prefs = await SharedPreferences.getInstance();
     isPremium.value = prefs.getBool("isPremium") ?? false;
+    isPremiumPlus.value = prefs.getBool("isPremiumPlus") ?? false;
   }
 
   // ---------------- VERIFY SUBSCRIPTION STATUS ----------------
@@ -236,8 +283,7 @@ class IAPService {
     try {
       debugPrint("Verify Subscription: Starting...");
 
-      // Only verify if user was previously marked as premium
-      if (!isPremium.value) {
+      if (!isPremium.value && !isPremiumPlus.value) {
         debugPrint(
           "Verify Subscription: User not premium, skipping verification.",
         );
@@ -245,8 +291,8 @@ class IAPService {
       }
 
       bool hasActivePurchase = false;
+      bool hasActivePremiumPlus = false;
 
-      // Create a temporary subscription to listen for restored purchases
       StreamSubscription<List<PurchaseDetails>>? tempSubscription;
 
       tempSubscription = _iap.purchaseStream.listen((purchases) {
@@ -255,33 +301,35 @@ class IAPService {
             "Verify Subscription: Found purchase - ${purchase.productID}, Status: ${purchase.status}",
           );
 
-          // Check if this is our subscription product and it's active
           if (purchase.productID == weeklyProductId &&
               (purchase.status == PurchaseStatus.purchased ||
                   purchase.status == PurchaseStatus.restored)) {
             hasActivePurchase = true;
-            debugPrint("Verify Subscription: Active subscription found!");
+          }
+
+          if (purchase.productID == creatorReelProductId &&
+              (purchase.status == PurchaseStatus.purchased ||
+                  purchase.status == PurchaseStatus.restored)) {
+            hasActivePremiumPlus = true;
           }
         }
       });
 
-      // Trigger restore to check for active purchases
       await _iap.restorePurchases();
-
-      // Wait a bit for the stream to process
       await Future.delayed(const Duration(seconds: 2));
-
-      // Cancel temp subscription
       await tempSubscription.cancel();
 
-      // If no active purchase found, revoke premium status
-      if (!hasActivePurchase) {
+      if (!hasActivePurchase && isPremium.value) {
         debugPrint(
-          "Verify Subscription: No active subscription found. Revoking premium status.",
+          "Verify Subscription: No active subscription found for Remove Ads. Revoking premium status.",
         );
         await _revokePremium();
-      } else {
-        debugPrint("Verify Subscription: Active subscription verified!");
+      }
+      if (!hasActivePremiumPlus && isPremiumPlus.value) {
+        debugPrint(
+          "Verify Subscription: No active subscription found for Creator Reel. Revoking premium plus status.",
+        );
+        await _revokePremiumPlus();
       }
     } catch (e) {
       debugPrint("Verify Subscription: Error - $e");
@@ -291,11 +339,16 @@ class IAPService {
   // ---------------- REVOKE PREMIUM ----------------
   Future<void> _revokePremium() async {
     isPremium.value = false;
-
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool("isPremium", false);
-
     debugPrint("Premium status revoked.");
+  }
+
+  Future<void> _revokePremiumPlus() async {
+    isPremiumPlus.value = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("isPremiumPlus", false);
+    debugPrint("Premium Plus status revoked.");
   }
 
   // ---------------- DISPOSE ----------------

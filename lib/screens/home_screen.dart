@@ -1156,6 +1156,17 @@ class _HomeScreenState extends State<HomeScreen>
         options: _creatorStudioOptions,
         onOptionTap: (option) {
           Navigator.pop(context);
+
+          if (!IAPService().isPremiumPlus.value) {
+            Navigator.of(context).push(
+              createSlideRoute(
+                const SalesScreen(showCreatorReel: true),
+                direction: SlideFrom.bottom,
+              ),
+            );
+            return;
+          }
+
           if (option.action == _CreatorStudioAction.trendyCaptions ||
               option.action == _CreatorStudioAction.trendyHashtags) {
             _showCreatorStudioOptionsSubSheet(option);
@@ -1336,7 +1347,7 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (dialogContext) {
         return _CreatorStudioDialog(
           option: option,
-          initialText: _linkController.text,
+          initialText: isParagraph ? "" : _linkController.text,
           isParagraph: isParagraph,
         );
       },
